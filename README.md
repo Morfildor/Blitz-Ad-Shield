@@ -10,7 +10,7 @@ Reduce advertising in the **Blitz.gg desktop app for League of Legends** without
 [![Version](https://img.shields.io/badge/version-v0.2%20experimental-F59E0B)](#project-status)
 [![License](https://img.shields.io/badge/license-MIT-64748B)](#license)
 
-[**Get started**](#installation) · [**How it works**](#how-it-works) · [**FAQ**](#frequently-asked-questions) · [**Report an issue**](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
+[**Download Windows ZIP**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip) · [**Installation**](#installation) · [**How it works**](#how-it-works) · [**FAQ**](#frequently-asked-questions)
 
 </div>
 
@@ -19,7 +19,7 @@ Reduce advertising in the **Blitz.gg desktop app for League of Legends** without
 > [!IMPORTANT]
 > **Experimental preview — not a confirmed working ad blocker.** The current Blitz release has **not** been tested with v0.2. Ads may remain, and future Blitz updates may break compatibility.
 >
-> **Source publication is pending:** This repository currently contains an import workflow, but not yet the full app. Its ZIP download is **not ready to use** until the project files are imported.
+> The app and source files are published in this repository. A **portable Windows ZIP** is built automatically from the repository source. There is no standalone `.exe` installer.
 
 ## What is Blitz Ad Shield?
 
@@ -39,9 +39,7 @@ It launches Blitz with a **localhost Chromium DevTools Protocol (CDP)** connecti
 
 **Requirements:** Windows 10/11, Windows PowerShell 5.1, an installed Blitz.gg desktop app, and a Blitz version that accepts Chromium remote-debugging flags.
 
-Once the source import is complete:
-
-1. Select **Code → Download ZIP** on [this repository](https://github.com/Morfildor/Blitz-Ad-Shield), then **extract** it. Do not run the scripts inside the ZIP.
+1. [**Download the portable Windows ZIP**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip) and **extract** it. Do not run the scripts inside the ZIP.
 2. **Completely quit Blitz**, including its notification-area icon.
 3. Double-click **`Launch-Blitz-Ad-Shield.vbs`** from the extracted folder.
 4. Locate the shield icon in the Windows tray (check the hidden-icons **^** menu).
@@ -71,7 +69,7 @@ This approach is **best-effort**. A successful connection does not prove that an
 | --- | --- |
 | **Latest prototype** | v0.2 — Windows system-tray edition |
 | **Compatibility** | Not verified with the current Blitz desktop release |
-| **Release status** | Application source import pending |
+| **Availability** | Application source published; portable ZIP built by GitHub Actions |
 | **Development** | Open-source, community-driven, experimental |
 
 This project is intentionally transparent about what is and is not verified. Confirm that it works on your Blitz version before relying on it.
@@ -129,10 +127,10 @@ Windows may display script-execution or download warnings. Read the source befor
 
 ## Contributing
 
-Found a broken selector, a changed ad endpoint, or a startup issue? [Report it here](https://github.com/Morfildor/Blitz-Ad-Shield/issues). Pull requests are welcome once source publication is complete. Please avoid including account tokens, private logs, or instructions to bypass Vanguard.
+Found a broken selector, a changed ad endpoint, or a startup issue? [Report it here](https://github.com/Morfildor/Blitz-Ad-Shield/issues). Pull requests are welcome. Please avoid including account tokens, private logs, or instructions to bypass Vanguard.
 
 ## License
 
-MIT License. © 2026 **Morfildor**. The license file will be available when the project import is complete.
+MIT License. © 2026 **Morfildor**. See [LICENSE](LICENSE).
 
 **Disclaimer:** Blitz Ad Shield is an unofficial, independent community project. It is not affiliated with, endorsed by, or supported by **Blitz.gg** or **Riot Games**. Their names and trademarks belong to their respective owners.
