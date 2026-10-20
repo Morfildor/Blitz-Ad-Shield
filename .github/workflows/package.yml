@@ -54,7 +54,7 @@ jobs:
         run: |
           git config user.name "Morfildor"
           git config user.email "23294363+Morfildor@users.noreply.github.com"
-          git add dist/Blitz-Ad-Shield-Tray-v0.2.zip
+          git add -f dist/Blitz-Ad-Shield-Tray-v0.2.zip
           if ! git diff --cached --quiet; then
             git commit -m "build: package portable Windows tray app"
             git push origin HEAD:main
