@@ -2,135 +2,65 @@
 
 # Blitz Ad Shield
 
-**A free, open-source Blitz.gg ad blocker for Windows.**
+### Less clutter. More game.
 
-Reduce advertising in the **Blitz.gg desktop app for League of Legends** without a paid subscription. Blitz Ad Shield combines network filtering and cosmetic cleanup with a lightweight Windows system-tray controller.
+**A free, open-source ad blocker for the Blitz.gg desktop app on Windows.**
 
-[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white)](#installation)
-[![Version](https://img.shields.io/badge/version-v0.2-2563EB)](#project-status)
-[![License](https://img.shields.io/badge/license-MIT-64748B)](#license)
+Block advertising requests, remove empty ad spaces, and keep Blitz running with a cleaner interface—all from a small utility that lives in your system tray.
 
-[**Download Windows ZIP**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip) · [**Installation**](#installation) · [**How it works**](#how-it-works) · [**FAQ**](#frequently-asked-questions)
+**[Download for Windows](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip)** · **[Get started](#get-started)** · **[View source](#how-it-works)** · **[Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)**
+
+<sub>Windows 10 / 11 · No subscription · No installer · MIT licensed</sub>
 
 </div>
 
 ---
 
-> [!IMPORTANT]
-> **Confirmed working with the latest Blitz.gg desktop app in maintainer testing on October 20, 2026.** This is a community-tested Windows build, not a guarantee that every ad will be removed on every machine or after future Blitz updates.
->
-> The app and source files are published in this repository. A **portable Windows ZIP** is built automatically from the repository source. There is no standalone `.exe` installer.
+## A cleaner Blitz.gg experience
 
-## What is Blitz Ad Shield?
+Blitz Ad Shield is a lightweight Windows companion for people using **Blitz.gg with League of Legends**. It filters selected advertising requests and removes unused ad placeholders without patching the Blitz installation or touching League of Legends or Riot Vanguard.
 
-**Blitz Ad Shield** is an independent, Windows-only utility for people who use Blitz.gg while playing League of Legends and would prefer fewer ads in the companion app.
+**Designed to stay out of your way:**
 
-It launches Blitz with a **localhost Chromium DevTools Protocol (CDP)** connection, filters a curated set of advertising requests, and applies cosmetic rules to hide selected ad placeholders. A notification-area icon lets you manage it without leaving a terminal window open.
+- **Block ads** — Filter known advertising requests inside the Blitz desktop app.
+- **Reclaim space** — Hide empty ad containers for a less cluttered layout.
+- **Use the system tray** — Start, stop, check status, or open logs without a terminal window.
+- **Keep control** — Free, locally operated, open-source scripts. No account or subscription required.
 
-- **Free and local:** No subscription, account, installer, or paid dependencies.
-- **Quiet system tray:** Start or stop protection, view status, and open logs.
-- **Two kinds of filtering:** Advertising URL patterns plus cosmetic page cleanup.
-- **No game-file changes:** Does not patch League of Legends, Riot Vanguard, or Blitz executables.
-- **Easy to reverse:** Fully exit Shield and restart Blitz normally.
+## Get started
 
-**It is not a browser extension, DNS blocker, League cheat, or replacement for Blitz Premium.** Results depend on how the current Blitz build serves its advertisements.
+1. **[Download Blitz Ad Shield for Windows](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip)** and extract the ZIP to a folder.
+2. **Fully exit Blitz**, including its icon in the Windows notification area.
+3. Double-click **`Launch-Blitz-Ad-Shield.vbs`** inside the extracted folder.
+4. Look for the **shield icon** in the system tray (under **^** if hidden).
+5. Right-click it to access **Start protection**, **Stop protection**, **Open logs folder**, or **Exit Shield**.
 
-## Installation
+Blitz opens through Shield, and protection continues without a visible command window. Keep the tray utility running while using Blitz.
 
-**Requirements:** Windows 10/11, Windows PowerShell 5.1, an installed Blitz.gg desktop app, and a Blitz version that accepts Chromium remote-debugging flags.
+**Requirements:** Windows 10 or 11, Windows PowerShell 5.1, and the Blitz.gg desktop app. No administrator privileges or additional ad-blocking software required.
 
-1. [**Download the portable Windows ZIP**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip) and **extract** it. Do not run the scripts inside the ZIP.
-2. **Completely quit Blitz**, including its notification-area icon.
-3. Double-click **`Launch-Blitz-Ad-Shield.vbs`** from the extracted folder.
-4. Locate the shield icon in the Windows tray (check the hidden-icons **^** menu).
-5. **Right-click the icon** for **Start protection**, **Stop protection**, **Open logs folder**, or **Exit Shield**.
-
-Blitz should launch through Shield. You **do not need to leave a Command Prompt window open**. If Windows disables VBScript, the project also contains `Run-Blitz-Ad-Shield.cmd` for console use.
-
-> **Installed Blitz somewhere else?** Launch `Blitz-Ad-Shield-Tray.ps1` using PowerShell with `-BlitzPath "C:\path\to\Blitz.exe"`.
+> If VBScript is disabled, use `Run-Blitz-Ad-Shield.cmd` instead. For a custom Blitz installation path, launch `Blitz-Ad-Shield-Tray.ps1` with `-BlitzPath "C:\path\to\Blitz.exe"`.
 
 ## How it works
 
+Blitz Ad Shield launches Blitz with a local **Chromium DevTools Protocol (CDP)** connection. The PowerShell worker uses it to filter advertising network requests and apply cosmetic cleanup rules. A separate tray controller manages the worker and stores diagnostic logs at:
+
 ```text
-Tray launcher
-    └── Hidden PowerShell worker
-          └── Starts Blitz with a 127.0.0.1 CDP debugging endpoint
-                ├── Rejects selected advertising URLs
-                └── Hides some known ad containers
+%LOCALAPPDATA%\BlitzAdShield\Logs
 ```
 
-Filtering is implemented in readable PowerShell source. The worker needs to stay running for continued protection; the tray controller manages it and saves diagnostic logs under `%LOCALAPPDATA%\BlitzAdShield\Logs`.
+Everything runs locally. There is no system-wide DNS change, proxy, service, browser extension, or modification of Blitz and Riot game files.
 
-This approach is **best-effort**. A successful connection does not prove that an ad was blocked, and filtering shared domains can interfere with legitimate Blitz content.
+The project is distributed as readable **PowerShell, VBScript, and CMD files**, not a compiled `.exe`. Browse [the source code](https://github.com/Morfildor/Blitz-Ad-Shield) or check [the changelog](CHANGELOG.md).
 
-## Project status
+## Important to know
 
-| | |
-| --- | --- |
-| **Current release** | v0.2 — Windows system-tray edition |
-| **Compatibility** | Confirmed working with the latest Blitz.gg desktop app in maintainer testing (October 20, 2026) |
-| **Availability** | Application source published; portable ZIP built by GitHub Actions |
-| **Development** | Open-source, actively evolving; future Blitz updates may require fixes |
+Shield uses a **localhost Chromium debugging port**. Other programs on your PC may be able to access that session while Blitz is running. Use it on a trusted computer, and **fully exit Blitz after use** to close its debugging port; closing Shield alone does not close it.
 
-The current release works in maintainer testing. Broader compatibility across Windows systems, Blitz updates, and individual ad formats has not yet been independently evaluated.
+Blitz updates may change how advertising is delivered. If something stops behaving as expected, [open an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues) with the Blitz version and a description of the problem. Review logs before sharing them, as they may contain sensitive URLs.
 
-## Frequently asked questions
+## Open source
 
-<details>
-<summary><strong>Can I block Blitz.gg ads without paying for Premium?</strong></summary>
+Contributions and fixes are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and the [MIT License](LICENSE).
 
-**Yes.** v0.2 successfully blocked Blitz.gg ads during testing with the latest desktop release on October 20, 2026. Results may change with app updates and differ between systems.
-
-</details>
-
-<details>
-<summary><strong>Do I need administrator access or another ad blocker?</strong></summary>
-
-Not by design. The scripts use Windows PowerShell and built-in .NET components. They do not require changing your hosts file, DNS settings, or installing a system-wide proxy.
-
-</details>
-
-<details>
-<summary><strong>Does it modify League of Legends or Riot Vanguard?</strong></summary>
-
-No. Shield connects to Blitz's Chromium interface and does not modify League of Legends or Vanguard. **Compatibility with anti-cheat software and Blitz's terms has not been independently verified.**
-
-</details>
-
-<details>
-<summary><strong>Why am I still seeing ads?</strong></summary>
-
-Blitz may have changed its advertising endpoints, layout, or support for CDP debugging. Check the local logs, then [open an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues) with your Blitz version and a description of what remains. Review logs before sharing them because they may contain sensitive URLs or hostnames.
-
-</details>
-
-<details>
-<summary><strong>Can I close the tray app after launching Blitz?</strong></summary>
-
-The console does not need to stay visible, but the **tray controller and its worker** must continue running for filtering to persist. Closing Shield stops filtering; it does **not** close Blitz's debugging port. Fully quit Blitz when finished.
-
-</details>
-
-<details>
-<summary><strong>How do I uninstall it?</strong></summary>
-
-Choose **Exit Shield**, completely exit Blitz, delete the extracted folder, and optionally remove `%LOCALAPPDATA%\BlitzAdShield\Logs`. There is no system-level installation to undo.
-
-</details>
-
-## Security and limitations
-
-> [!WARNING]
-> **The Chromium debugging port is sensitive.** Shield requests a loopback address (`127.0.0.1`), but other software on your computer may be able to access the debugging endpoint while Blitz is running. Use this utility only on a trusted computer and **completely quit Blitz** when you are done.
-
-Windows may display script-execution or download warnings. Read the source before running it; do not disable system or organizational security protections. Shield does not include telemetry or developer-run servers, but Blitz itself continues to communicate with its own services.
-
-## Contributing
-
-Found a broken selector, a changed ad endpoint, or a startup issue? [Report it here](https://github.com/Morfildor/Blitz-Ad-Shield/issues). Pull requests are welcome. Please avoid including account tokens, private logs, or instructions to bypass Vanguard.
-
-## License
-
-MIT License. © 2026 **Morfildor**. See [LICENSE](LICENSE).
-
-**Disclaimer:** Blitz Ad Shield is an unofficial, independent community project. It is not affiliated with, endorsed by, or supported by **Blitz.gg** or **Riot Games**. Their names and trademarks belong to their respective owners.
+<sub>© 2026 Morfildor. Independent community project. Not affiliated with or endorsed by Blitz.gg or Riot Games. All respective trademarks belong to their owners.</sub>
