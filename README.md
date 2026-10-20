@@ -1,16 +1,16 @@
 <div align="center">
 
-# 🛡️ Blitz Ad Shield
+<img src="docs/assets/shield.svg" alt="Blitz Ad Shield" width="88">
 
-**Less ads. More game.**
+# Blitz Ad Shield
 
-A free, open-source ad blocker for the **Blitz.gg desktop app on Windows**.
+**Fewer ads. More room for the game.**
 
-Keep Blitz's useful features and get rid of distracting ads and empty ad spaces. It runs quietly in your system tray, with no subscription or extra software to install.
+A free, open-source ad blocker for the **Blitz.gg desktop app on Windows**. It blocks known ad requests, cleans up empty ad spaces, and runs quietly in your system tray.
 
-**[Download for Windows](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip)** · **[How to install](#-getting-started)** · **[Source code](#how-it-works)** · **[Report a bug](https://github.com/Morfildor/Blitz-Ad-Shield/issues)**
+[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
 
-<sub>Windows 10 / 11 · Free · Open source · MIT License</sub>
+<sub>Windows 10/11 · No subscription · No installer · MIT License</sub>
 
 </div>
 
@@ -18,58 +18,66 @@ Keep Blitz's useful features and get rid of distracting ads and empty ad spaces.
 
 ## Why I made this
 
-Blitz is handy when you're playing League of Legends, but the ads can take up a lot of space. I wanted a simple way to clean up the app without paying for a subscription or messing with the game itself.
+I like using Blitz with League of Legends. I just don't like how much space its ads take up.
 
-That's what Blitz Ad Shield does. It blocks known advertising requests, hides empty ad containers, and stays out of your way while you play.
+Blitz Ad Shield is a small tool I made to deal with that. Launch Blitz through it and carry on playing as usual, without having another window to manage.
 
-### What you get
+## ✨ Features
 
-- **Fewer distractions:** Blocks known ad requests inside the Blitz desktop app.
-- **More room:** Hides empty ad slots instead of leaving awkward gaps.
-- **A simple tray icon:** Start or stop protection, check its status, and open logs whenever you need to.
-- **No changes to game files:** Doesn't patch Blitz, League of Legends, or Riot Vanguard.
-- **No subscription:** Free to use, with the source code available here on GitHub.
+- **Blocks ad requests.** Filters known advertising networks used by the Blitz desktop app.
+- **Cleans up the layout.** Hides empty ad containers so they don't take up space.
+- **Stays in your system tray.** Start or stop protection, check its status, and open logs with a right-click.
+- **Leaves game files alone.** No changes to Blitz's installed files, League of Legends, or Riot Vanguard.
+- **Runs locally.** No account, subscription, administrator rights, or separate ad-blocking service needed.
 
-## 📦 Getting started
+## Installation
 
-1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip)** and extract the ZIP into a folder.
-2. **Close Blitz completely.** Check the Windows system tray to make sure it isn't still running.
-3. Double-click **`Launch-Blitz-Ad-Shield.vbs`** in the extracted folder.
-4. Look for the shield icon near your clock. It may be hidden under the **^** menu.
-5. Right-click the icon to **Start protection**, **Stop protection**, **Open logs folder**, or **Exit Shield**.
+1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip)** and extract the ZIP.
+2. **Quit Blitz completely.** Make sure it's also closed in the Windows system tray.
+3. Open the extracted folder and double-click **`Launch-Blitz-Ad-Shield.vbs`**.
+4. Find the shield icon in your system tray. It might be tucked under the **^** hidden-icons menu.
 
-That's it. Blitz launches through Ad Shield, and you can leave the tool running in the tray. **No command window needs to stay open.**
+That's it. Blitz launches with Ad Shield running in the background. You don't need to keep a command window open, just leave the shield running in your tray.
 
-**You'll need:** Windows 10 or 11, Windows PowerShell 5.1, and Blitz.gg installed.
+**Tray controls:** Right-click the shield icon to **Start protection**, **Stop protection**, **Open logs folder**, or **Exit Shield**.
 
-If Windows has VBScript disabled, use `Run-Blitz-Ad-Shield.cmd` instead.
+**Requirements:** Windows 10 or 11, Windows PowerShell 5.1, and the Blitz.gg desktop app.
 
-**Using a custom Blitz installation folder?** Launch `Blitz-Ad-Shield-Tray.ps1` in PowerShell with `-BlitzPath "C:\path\to\Blitz.exe"`.
+<details>
+<summary><strong>Alternative launch options</strong></summary>
+
+If VBScript is disabled on your PC, launch `Run-Blitz-Ad-Shield.cmd` instead.
+
+If Blitz is installed somewhere unusual, start `Blitz-Ad-Shield-Tray.ps1` in PowerShell with the custom executable path:
+
+```powershell
+.\Blitz-Ad-Shield-Tray.ps1 -BlitzPath "C:\path\to\Blitz.exe"
+```
+
+</details>
 
 ## ⚙️ How it works
 
-Blitz Ad Shield uses a local **Chromium DevTools Protocol (CDP)** connection to filter selected ad requests and hide ad containers in Blitz.
+Blitz Ad Shield connects to Blitz through the **Chromium DevTools Protocol (CDP)**. It filters selected advertising requests and applies CSS rules to hide known ad placeholders.
 
-The blocker runs as a PowerShell process, while the tray icon gives you a convenient way to control it. Logs are saved locally at:
+The [PowerShell blocker](Blitz-Ad-Shield.ps1) does the filtering, and the [tray controller](Blitz-Ad-Shield-Tray.ps1) manages it. Logs are saved to `%LOCALAPPDATA%\BlitzAdShield\Logs`.
 
-```text
-%LOCALAPPDATA%\BlitzAdShield\Logs
-```
+It doesn't modify game files, change your DNS settings, or install a system-wide proxy.
 
-There are no DNS changes, system-wide proxies, browser extensions, or patches to Riot's game files. The app is made up of readable PowerShell, VBScript, and CMD scripts, not a compiled executable.
+## Troubleshooting
 
-## 🔒 A quick security note
+If Blitz doesn't start, make sure it's completely closed before launching Shield again. If the tray icon isn't visible, check the hidden-icons menu. If your PC blocks the VBScript launcher, use the CMD alternative above.
 
-Ad Shield starts Blitz with a **local Chromium debugging port**. Other programs on your computer may be able to access that connection while Blitz is open, so use it only on a PC you trust.
+For other problems, [open a GitHub issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues). Include your Windows and Blitz versions, along with what happened. Please remove sensitive URLs or other private information from logs before sharing them.
 
-When you're done, **fully close Blitz** to shut down its debugging port. Exiting Ad Shield alone won't close it.
+## A note about security
 
-Blitz updates can occasionally change how ads are loaded. If you run into a problem, [open an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues). Please check logs for sensitive URLs before sharing them.
+Shield opens a **local Chromium debugging port** while Blitz is running. Other programs on your computer may be able to access that session, so use it on a trusted PC.
 
-## Contribute
+**Fully quit Blitz when you're done.** Closing the Shield tray app stops filtering, but it doesn't close Blitz's debugging port. Future Blitz updates may also change how ad filtering behaves.
 
-Found something to improve? Issues and pull requests are welcome.
+## Contributing
 
-Check out [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and the [MIT License](LICENSE).
+Found a bug or have an idea? Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [LICENSE](LICENSE).
 
-<sub>© 2026 Morfildor. This is an independent community project and is not affiliated with Blitz.gg or Riot Games. All trademarks belong to their respective owners.</sub>
+<sub>© 2026 Morfildor. Blitz Ad Shield is an independent community project, not affiliated with Blitz.gg or Riot Games. All trademarks belong to their respective owners.</sub>
