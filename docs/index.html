@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b1427">
-  <meta name="description" content="Blitz Ad Shield is a free experimental Windows system-tray utility that attempts to block ads in the Blitz.gg desktop app using local Chromium controls.">
-  <title>Blitz Ad Shield — A quieter Blitz desktop experience</title>
+  <meta name="description" content="Blitz Ad Shield is a free, open-source Blitz.gg ad blocker for Windows. Confirmed working with the latest Blitz desktop app in October 2026. Download the tray utility.">
+  <title>Blitz.gg Ad Blocker for Windows — Blitz Ad Shield (Free, Open Source)</title>
   <link rel="icon" type="image/svg+xml" href="assets/shield.svg">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -26,11 +26,11 @@
   <main id="main">
     <section class="hero container" id="top">
       <div class="hero-copy">
-        <span class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Free · Windows · Open source · Experimental</span>
+        <span class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Free · Windows · Open source · Tested with latest Blitz</span>
         <h1>Less clutter.<br><span class="gradient-text">More game.</span></h1>
-        <p class="lead">Blitz Ad Shield is a lightweight system-tray companion that attempts to filter advertising requests and hide empty ad placements in the <strong>Blitz.gg desktop app</strong>.</p>
+        <p class="lead">Blitz Ad Shield is a free Windows tray utility that blocks advertising requests and hides empty ad placements in the <strong>Blitz.gg desktop app</strong>. Tested successfully with the latest Blitz version on October 20, 2026.</p>
         <div class="hero-buttons">
-          <a class="button button-primary" href="https://github.com/Morfildor/Blitz-Ad-Shield/archive/refs/heads/main.zip">Download source ZIP <span aria-hidden="true">↓</span></a>
+          <a class="button button-primary" href="https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip">Download Windows app <span aria-hidden="true">↓</span></a>
           <a class="button button-secondary" href="https://github.com/Morfildor/Blitz-Ad-Shield">View source on GitHub <span aria-hidden="true">↗</span></a>
         </div>
         <p class="hero-note">No account. No subscription. No administrator privileges. No modifications to game files.</p>
@@ -49,7 +49,7 @@
         <p class="mockup-caption">Illustrative tray preview, not a screenshot of verified functionality</p>
       </div>
     </section>
-    <div class="container"><div class="notice" role="note"><strong>Experimental project.</strong> Compatibility with the current Blitz version has not been verified on Windows. Ads may still appear, and the app may ignore Chromium debugging flags. <a href="#safety">Read the limitations</a>.</div></div>
+    <div class="container"><div class="notice" role="note"><strong>Confirmed in maintainer testing (October 20, 2026).</strong> Blitz Ad Shield works with the latest Blitz.gg desktop app tested. Compatibility is not guaranteed on every PC or following future Blitz updates. <a href="#safety">Read the limitations</a>.</div></div>
     <section class="section container" id="features">
       <div class="section-head"><span class="kicker">BUILT TO STAY OUT OF THE WAY</span><h2>Simple controls. Local operation.</h2><p>Designed as a small utility, not another application you need to manage.</p></div>
       <div class="feature-grid">
@@ -62,7 +62,7 @@
     <section class="section container steps-section" id="setup">
       <div class="section-head"><span class="kicker">GETTING STARTED</span><h2>Ready in a few steps.</h2><p>The tool uses components already present on Windows 10 and 11.</p></div>
       <ol class="steps">
-        <li><span class="step-number">01</span><div><h3>Download and extract</h3><p>Download the source ZIP from GitHub and extract the complete folder. Avoid running files directly from within the archive.</p></div></li>
+        <li><span class="step-number">01</span><div><h3>Download and extract</h3><p>Download the portable Windows application ZIP from GitHub and extract the complete folder. Avoid running files directly from within the archive.</p></div></li>
         <li><span class="step-number">02</span><div><h3>Fully quit Blitz</h3><p>Exit the desktop app and its existing notification-area icon before launching Shield.</p></div></li>
         <li><span class="step-number">03</span><div><h3>Start the tray launcher</h3><p>Double-click <code>Launch-Blitz-Ad-Shield.vbs</code>, or use <code>Run-Blitz-Ad-Shield.cmd</code> if VBScript is disabled.</p></div></li>
         <li><span class="step-number">04</span><div><h3>Manage from the shield icon</h3><p>Find the shield icon in the Windows notification area, then right-click for Start, Stop, Logs, and Exit.</p></div></li>
@@ -72,7 +72,7 @@
     <section class="section container" id="safety">
       <div class="safety-panel">
         <div><span class="kicker">IMPORTANT TO KNOW</span><h2>Read this before using Shield.</h2><p>Blitz Ad Shield starts Blitz with a localhost Chromium debugging port. This is more powerful than an ordinary ad-blocking browser extension.</p></div>
-        <div class="safety-points"><p><strong>Keep it local.</strong> Other programs on the same PC may be able to access Blitz's debugging session. Only use it on a trusted machine.</p><p><strong>Fully quit Blitz afterward.</strong> Exiting Shield by itself does not close Blitz's debugging port.</p><p><strong>Expect breakage.</strong> This build is untested with the current Blitz release and may not block ads, or it may affect Blitz's layout and overlay.</p><p><strong>Independent project.</strong> Not affiliated with Blitz.gg or Riot Games. Terms-of-service and Vanguard compatibility have not been verified.</p></div>
+        <div class="safety-points"><p><strong>Keep it local.</strong> Other programs on the same PC may be able to access Blitz's debugging session. Only use it on a trusted machine.</p><p><strong>Fully quit Blitz afterward.</strong> Exiting Shield by itself does not close Blitz's debugging port.</p><p><strong>Updates may affect compatibility.</strong> The latest Blitz version worked in maintainer testing on October 20, 2026, but future app changes may affect ad filtering, layout, or the overlay.</p><p><strong>Independent project.</strong> Not affiliated with Blitz.gg or Riot Games. Terms-of-service and Vanguard compatibility have not been verified.</p></div>
       </div>
     </section>
     <section class="section container closing"><img src="assets/shield.svg" alt="" width="58" height="58"><h2>Open source. Easy to inspect.</h2><p>Read the full scripts, report an issue, or help improve compatibility with new Blitz releases.</p><div class="hero-buttons center"><a class="button button-primary" href="https://github.com/Morfildor/Blitz-Ad-Shield">Explore the repository <span aria-hidden="true">↗</span></a><a class="button button-secondary" href="https://github.com/Morfildor/Blitz-Ad-Shield/issues">Report an issue <span aria-hidden="true">→</span></a></div></section>
