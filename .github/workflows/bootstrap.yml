@@ -31,6 +31,9 @@ jobs:
                   target.parent.mkdir(parents=True, exist_ok=True)
                   target.write_bytes(archive.extractfile(entry).read())
           PY
+      - name: Preserve current public README
+        shell: bash
+        run: git show HEAD:README.md > README.md
       - name: Commit project and remove one-time importer
         shell: bash
         run: |
