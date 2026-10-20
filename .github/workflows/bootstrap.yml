@@ -1,0 +1,42 @@
+name: One-time source import
+on:
+  push:
+    paths:
+      - 'bootstrap-source.b64'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    if: github.repository == 'Morfildor/Blitz-Ad-Shield'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Expand verified local source archive
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, io, pathlib, tarfile
+          data = base64.b64decode(pathlib.Path('bootstrap-source.b64').read_text().strip(), validate=True)
+          with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as archive:
+              members = archive.getmembers()
+              for entry in members:
+                  path = pathlib.PurePosixPath(entry.name)
+                  if path.is_absolute() or '..' in path.parts or not entry.isfile():
+                      raise RuntimeError('Unexpected path or entry in the source archive')
+              for entry in members:
+                  target = pathlib.Path(entry.name)
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(archive.extractfile(entry).read())
+          PY
+      - name: Commit project and remove one-time importer
+        shell: bash
+        run: |
+          rm bootstrap-source.b64 .github/workflows/bootstrap.yml
+          git config user.name "Morfildor"
+          git config user.email "23294363+Morfildor@users.noreply.github.com"
+          git add -A
+          git commit -m "Publish Blitz Ad Shield v0.2 project and website"
+          git push origin HEAD:main
