@@ -1,8 +1,8 @@
 # Security policy
 
-## Project status
+## Scope
 
-Blitz Ad Shield is experimental and has not undergone an external security audit. Security fixes will be considered on a best-effort basis; no formal support or response-time commitment is offered.
+Blitz Ad Shield has not undergone an external security audit. Security reports are reviewed on a best-effort basis; no formal response-time commitment is offered.
 
 ## Security-sensitive behavior
 
@@ -18,5 +18,5 @@ Please **do not publish credentials, active tokens, or proof-of-concept attacks 
 
 | Version | Status |
 | --- | --- |
-| 0.2 | Experimental; no compatibility guarantee |
+| 0.2 | Current |
 | Earlier versions | Not supported |
