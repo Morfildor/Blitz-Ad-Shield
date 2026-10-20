@@ -15,6 +15,3 @@ All notable changes to Blitz Ad Shield are documented here.
 - Selected ad network request blocking and cosmetic ad-slot hiding.
 - Console diagnostics and hostname inspection.
 
-### Verification
-- Confirmed working with the latest Blitz.gg desktop application in maintainer testing on 2026-10-20.
-- Other PC configurations and future Blitz releases are not yet independently verified.
