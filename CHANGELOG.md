@@ -16,4 +16,5 @@ All notable changes to Blitz Ad Shield are documented here.
 - Console diagnostics and hostname inspection.
 
 ### Verification
-- Experimental build; not verified against a current installation of Blitz on Windows.
+- Confirmed working with the latest Blitz.gg desktop application in maintainer testing on 2026-10-20.
+- Other PC configurations and future Blitz releases are not yet independently verified.
