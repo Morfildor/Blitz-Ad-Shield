@@ -6,8 +6,8 @@
 
 Reduce advertising in the **Blitz.gg desktop app for League of Legends** without a paid subscription. Blitz Ad Shield combines network filtering and cosmetic cleanup with a lightweight Windows system-tray controller.
 
-[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white)](#requirements)
-[![Version](https://img.shields.io/badge/version-v0.2%20experimental-F59E0B)](#project-status)
+[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white)](#installation)
+[![Version](https://img.shields.io/badge/version-v0.2-2563EB)](#project-status)
 [![License](https://img.shields.io/badge/license-MIT-64748B)](#license)
 
 [**Download Windows ZIP**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip) · [**Installation**](#installation) · [**How it works**](#how-it-works) · [**FAQ**](#frequently-asked-questions)
@@ -17,7 +17,7 @@ Reduce advertising in the **Blitz.gg desktop app for League of Legends** without
 ---
 
 > [!IMPORTANT]
-> **Experimental preview — not a confirmed working ad blocker.** The current Blitz release has **not** been tested with v0.2. Ads may remain, and future Blitz updates may break compatibility.
+> **Confirmed working with the latest Blitz.gg desktop app in maintainer testing on October 20, 2026.** This is a community-tested Windows build, not a guarantee that every ad will be removed on every machine or after future Blitz updates.
 >
 > The app and source files are published in this repository. A **portable Windows ZIP** is built automatically from the repository source. There is no standalone `.exe` installer.
 
@@ -25,7 +25,7 @@ Reduce advertising in the **Blitz.gg desktop app for League of Legends** without
 
 **Blitz Ad Shield** is an independent, Windows-only utility for people who use Blitz.gg while playing League of Legends and would prefer fewer ads in the companion app.
 
-It launches Blitz with a **localhost Chromium DevTools Protocol (CDP)** connection, attempts to block a curated set of advertising requests, and applies cosmetic rules to hide selected ad placeholders. A notification-area icon lets you manage it without leaving a terminal window open.
+It launches Blitz with a **localhost Chromium DevTools Protocol (CDP)** connection, filters a curated set of advertising requests, and applies cosmetic rules to hide selected ad placeholders. A notification-area icon lets you manage it without leaving a terminal window open.
 
 - **Free and local:** No subscription, account, installer, or paid dependencies.
 - **Quiet system tray:** Start or stop protection, view status, and open logs.
@@ -67,19 +67,19 @@ This approach is **best-effort**. A successful connection does not prove that an
 
 | | |
 | --- | --- |
-| **Latest prototype** | v0.2 — Windows system-tray edition |
-| **Compatibility** | Not verified with the current Blitz desktop release |
+| **Current release** | v0.2 — Windows system-tray edition |
+| **Compatibility** | Confirmed working with the latest Blitz.gg desktop app in maintainer testing (October 20, 2026) |
 | **Availability** | Application source published; portable ZIP built by GitHub Actions |
-| **Development** | Open-source, community-driven, experimental |
+| **Development** | Open-source, actively evolving; future Blitz updates may require fixes |
 
-This project is intentionally transparent about what is and is not verified. Confirm that it works on your Blitz version before relying on it.
+The current release works in maintainer testing. Broader compatibility across Windows systems, Blitz updates, and individual ad formats has not yet been independently evaluated.
 
 ## Frequently asked questions
 
 <details>
 <summary><strong>Can I block Blitz.gg ads without paying for Premium?</strong></summary>
 
-Blitz Ad Shield **attempts** to do that in the Windows desktop app. It does not guarantee complete ad removal or compatibility with the latest version.
+**Yes.** v0.2 successfully blocked Blitz.gg ads during testing with the latest desktop release on October 20, 2026. Results may change with app updates and differ between systems.
 
 </details>
 
