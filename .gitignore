@@ -1,0 +1,18 @@
+# Local diagnostics and runtime state
+Logs/
+*.log
+*.log.*
+*.tmp
+*.bak
+*.ps1xml
+
+# Editor and Windows clutter
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary archives
+*.zip
+*.7z

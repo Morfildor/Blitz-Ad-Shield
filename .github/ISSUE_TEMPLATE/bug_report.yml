@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a tray, startup, connection or ad-blocking problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before reporting, read the README troubleshooting section. **Never paste tokens, usernames, private URLs or unredacted logs.**
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: input
+    id: blitz
+    attributes:
+      label: Blitz version
+      placeholder: Version shown in Blitz settings
+    validations:
+      required: true
+  - type: dropdown
+    id: launcher
+    attributes:
+      label: How did you start Shield?
+      options:
+        - Tray VBS launcher
+        - CMD fallback launcher
+        - Direct PowerShell tray script
+        - Console diagnostics
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include what you expected, what actually happened and whether the tray status said connected.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant redacted log lines (optional)
+      description: Review and redact all sensitive data before sharing.
+      render: text
