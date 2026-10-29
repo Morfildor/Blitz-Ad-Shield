@@ -22,6 +22,11 @@ $script:connected = $false
 $script:stoppedByUser = $false
 $script:statusMessage = 'Starting...'
 $script:shuttingDown = $false
+$script:updateScript = Join-Path $PSScriptRoot 'Update-Blitz-Ad-Shield.ps1'
+$script:updateStateDir = Join-Path $env:LOCALAPPDATA 'BlitzAdShield\Updater'
+$script:nextUpdateCheck = (Get-Date).AddHours(6)
+$script:updateProcess = $null
+$script:notifiedVersion = ''
 
 # Only one controller per logged-in Windows session.
 $createdNew = $false
@@ -39,6 +44,9 @@ $script:statusItem.Enabled = $false
 $script:startItem = [System.Windows.Forms.ToolStripMenuItem]::new('Start protection')
 $script:stopItem = [System.Windows.Forms.ToolStripMenuItem]::new('Stop protection')
 $script:logsItem = [System.Windows.Forms.ToolStripMenuItem]::new('Open logs folder')
+$script:checkUpdatesItem = [System.Windows.Forms.ToolStripMenuItem]::new('Check for updates')
+$script:updateInfoItem = [System.Windows.Forms.ToolStripMenuItem]::new('Updates: automatic')
+$script:updateInfoItem.Enabled = $false
 $script:exitItem = [System.Windows.Forms.ToolStripMenuItem]::new('Exit Shield')
 $script:timer = New-Object System.Windows.Forms.Timer
 $script:timer.Interval = 1300
@@ -56,6 +64,8 @@ if (Test-Path -LiteralPath $script:iconFile -PathType Leaf) {
 [void]$script:menu.Items.Add($script:startItem)
 [void]$script:menu.Items.Add($script:stopItem)
 [void]$script:menu.Items.Add($script:logsItem)
+[void]$script:menu.Items.Add($script:checkUpdatesItem)
+[void]$script:menu.Items.Add($script:updateInfoItem)
 [void]$script:menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 [void]$script:menu.Items.Add($script:exitItem)
 $script:tray.ContextMenuStrip = $script:menu
@@ -154,11 +164,50 @@ function Stop-Shield {
     $script:stopItem.Enabled = $false
 }
 
-$script:startItem.Add_Click({ Start-Shield })
+
+function Start-UpdateCheck {
+    if (-not (Test-Path -LiteralPath $script:updateScript -PathType Leaf)) { return }
+    if ($null -ne $script:updateProcess) {
+        try { if (-not $script:updateProcess.HasExited) { return } }
+        catch { }
+        try { $script:updateProcess.Dispose() } catch { }
+        $script:updateProcess = $null
+    }
+    $script:nextUpdateCheck = (Get-Date).AddHours(6)
+    try {
+        [void][IO.Directory]::CreateDirectory($script:logDir)
+        $shell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -Mode Stage -InstallDir "{1}"' -f $script:updateScript, $PSScriptRoot
+        $outLog = Join-Path $script:logDir 'update-check.log'
+        $errorLog = Join-Path $script:logDir 'update-check-errors.log'
+        $script:updateProcess = Start-Process -FilePath $shell -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errorLog
+        $script:updateInfoItem.Text = 'Updates: checking GitHub...'
+    }
+    catch {
+        $script:updateInfoItem.Text = 'Updates: check unavailable'
+    }
+}
+
+function Poll-Updates {
+    if ($null -ne $script:updateProcess) {
+        try {
+            if (-not $script:updateProcess.HasExited) { return }
+            $script:updateProcess.Dispose()
+        } catch { }
+        $script:updateProcess = $null
+        $script:updateInfoItem.Text = 'Updates: automatic'
+    }
+    $pendingFile = Join-Path $script:updateStateDir 'pending.json'
+    if (Test-Path -LiteralPath $pendingFile -PathType Leaf) {
+        try {
+            $pending = Get-Content -LiteralPath $pendingFile -Raw | ConvertFrom-Json
+            $currentVersion = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim()
+            if ([string]$pending.version -match '^\d+\.\d+\.\d+
 $script:stopItem.Add_Click({
     Stop-Shield
     Show-ShieldNotice 'Blocking stopped. Fully quit Blitz to close its debugging port; restart Blitz through Shield to resume.'
 })
+$script:checkUpdatesItem.Add_Click({ Start-UpdateCheck })
 $script:logsItem.Add_Click({
     [void][IO.Directory]::CreateDirectory($script:logDir)
     Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $script:logDir) | Out-Null
@@ -171,6 +220,7 @@ $script:exitItem.Add_Click({
 })
 
 $script:timer.Add_Tick({
+    Poll-Updates
     if ($null -eq $script:worker) { return }
     if (Worker-IsRunning) {
         if ($script:stdoutPath -and (Test-Path -LiteralPath $script:stdoutPath)) {
@@ -219,6 +269,100 @@ try {
 }
 finally {
     $script:timer.Stop()
+    if ($null -ne $script:updateProcess) { try { $script:updateProcess.Dispose() } catch { } }
+    if (Worker-IsRunning) { Stop-Shield }
+    if ($null -ne $script:worker) { $script:worker.Dispose() }
+    $script:timer.Dispose()
+    $script:tray.Visible = $false
+    $script:tray.Dispose()
+    $script:menu.Dispose()
+    if ($null -ne $script:icon) { $script:icon.Dispose() }
+    $script:context.Dispose()
+    if ($createdNew) {
+        try { $script:mutex.ReleaseMutex() } catch { }
+    }
+    $script:mutex.Dispose()
+}
+ -and [version]$pending.version -gt [version]$currentVersion) {
+                $script:updateInfoItem.Text = "Update v$($pending.version) ready for next launch"
+                if ($script:notifiedVersion -ne [string]$pending.version) {
+                    $script:notifiedVersion = [string]$pending.version
+                    Show-ShieldNotice "Update v$($pending.version) downloaded. Fully close Blitz, then launch Shield again to install it."
+                }
+            }
+        } catch { }
+    }
+    if ((Get-Date) -ge $script:nextUpdateCheck) { Start-UpdateCheck }
+}
+
+$script:startItem.Add_Click({ Start-Shield })
+$script:stopItem.Add_Click({
+    Stop-Shield
+    Show-ShieldNotice 'Blocking stopped. Fully quit Blitz to close its debugging port; restart Blitz through Shield to resume.'
+})
+$script:checkUpdatesItem.Add_Click({ Start-UpdateCheck })
+$script:logsItem.Add_Click({
+    [void][IO.Directory]::CreateDirectory($script:logDir)
+    Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $script:logDir) | Out-Null
+})
+$script:tray.Add_DoubleClick({ Show-ShieldNotice "Current status: $script:statusMessage" })
+$script:exitItem.Add_Click({
+    $script:shuttingDown = $true
+    Stop-Shield
+    $script:context.ExitThread()
+})
+
+$script:timer.Add_Tick({
+    Poll-Updates
+    if ($null -eq $script:worker) { return }
+    if (Worker-IsRunning) {
+        if ($script:stdoutPath -and (Test-Path -LiteralPath $script:stdoutPath)) {
+            try {
+                $tail = @(Get-Content -LiteralPath $script:stdoutPath -Tail 12 -ErrorAction Stop)
+                # Use the latest connection event. Older messages may still be in the tail.
+                $events = @($tail | Where-Object { $_ -match '(?i)^(Reconnecting to Blitz|Connected\.|Reconnected to Blitz)' })
+                if ($events.Count -gt 0) {
+                    $latest = [string]$events[-1]
+                    if ($latest -match '^Reconnecting to Blitz') {
+                        Set-TrayStatus 'Reconnecting to Blitz...'
+                    } else {
+                        $script:connected = $true
+                        Set-TrayStatus 'Protection connected'
+                    }
+                }
+            } catch { }
+        }
+    }
+    else {
+        $exitCode = 1
+        try { $exitCode = $script:worker.ExitCode } catch { }
+        try { $script:worker.Dispose() } catch { }
+        $script:worker = $null
+        $script:startItem.Enabled = $true
+        $script:stopItem.Enabled = $false
+        if (-not $script:shuttingDown -and -not $script:stoppedByUser) {
+            if ($exitCode -eq 0 -and $script:connected) {
+                Set-TrayStatus 'Disconnected (Blitz closed?)'
+                Show-ShieldNotice 'Protection disconnected. Start protection again after fully closing Blitz.'
+            } else {
+                Set-TrayStatus 'Protection stopped with an error'
+                $detail = Get-LatestWorkerMessage
+                if ($detail.Length -gt 180) { $detail = $detail.Substring(0,180) }
+                if (-not $detail) { $detail = 'Open the logs folder for details.' }
+                Show-ShieldNotice "The blocker stopped: $detail" $true
+            }
+        }
+    }
+})
+
+try {
+    $script:timer.Start()
+    Start-Shield
+    [System.Windows.Forms.Application]::Run($script:context)
+}
+finally {
+    $script:timer.Stop()
+    if ($null -ne $script:updateProcess) { try { $script:updateProcess.Dispose() } catch { } }
     if (Worker-IsRunning) { Stop-Shield }
     if ($null -ne $script:worker) { $script:worker.Dispose() }
     $script:timer.Dispose()
