@@ -8,7 +8,7 @@
 
 A free, open-source ad blocker for the **Blitz.gg desktop app on Windows**. It blocks known ad requests, cleans up empty ad spaces, and runs quietly in your system tray.
 
-[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.5.0.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
+[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.5.1.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
 
 <sub>Windows 10/11 · No subscription · No installer · MIT License</sub>
 
@@ -32,14 +32,14 @@ Blitz Ad Shield is a small tool I made to deal with that. Launch Blitz through i
 
 ## Installation
 
-1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.5.0.zip)** and extract the ZIP.
+1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.5.1.zip)** and extract the ZIP.
 2. **Quit Blitz completely.** Make sure it's also closed in the Windows system tray.
 3. Open the extracted folder and double-click **`Launch-Blitz-Ad-Shield.vbs`**.
 4. Find the shield icon in your system tray. It might be tucked under the **^** hidden-icons menu.
 
 That's it. Blitz launches with Ad Shield running in the background. You don't need to keep a command window open, just leave the shield running in your tray.
 
-**Tray controls:** Right-click the shield icon to **Start protection**, **Stop protection**, **Open logs folder**, or **Exit Shield**. The menu also shows the installed version, making updates easy to verify.
+**Tray controls:** Right-click the shield icon for **Start protection**, **Stop protection**, **Check for updates**, **Open logs folder**, or **Exit Shield**. It also shows your installed version, update status, and when GitHub was last checked.
 
 **Requirements:** Windows 10 or 11, Windows PowerShell 5.1, and the Blitz.gg desktop app.
 
@@ -63,7 +63,7 @@ Starting with **v0.4**, Ad Shield takes care of its own updates from this GitHub
 - **On launch:** Shield checks GitHub and installs any available update before starting Blitz.
 - **While you're playing:** It checks again every six hours and downloads newer releases quietly.
 - **After Blitz closes:** From **v0.5**, Shield installs a downloaded update on its own, restarts its tray icon, and stays ready for your next session. It won't reopen Blitz unexpectedly.
-- **From the tray:** You can still right-click **Check for updates** at any time.
+- **From the tray:** Choose **Check for updates** at any time. The menu shows **Up to date**, **Downloaded**, or **Check failed**, along with the most recent check time. A failed check never disables ad blocking.
 
 Downloads come from this repository over HTTPS and are checked against a published **SHA-256 checksum**. If GitHub is unavailable or an update fails verification, Ad Shield continues using your current version. Previous files are backed up locally.
 
