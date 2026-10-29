@@ -1,4 +1,4 @@
-﻿# Blitz Ad Shield v0.3 — local, reversible, no installed-file modifications.
+﻿# Blitz Ad Shield v0.4 — local, reversible, no installed-file modifications.
 # Windows PowerShell 5.1+; no admin rights or dependencies required.
 # This console-based worker also runs hidden under the tray controller.
 param(
@@ -126,7 +126,7 @@ function Find-FreeLoopbackPort {
 }
 
 Write-Host ''
-Write-Host 'Blitz Ad Shield v0.3' -ForegroundColor Cyan
+Write-Host 'Blitz Ad Shield v0.4' -ForegroundColor Cyan
 Write-Host 'Local Chromium request blocker + optional ad-slot hiding.'
 Write-Host 'In console mode, leave this window running; press Ctrl+C to stop blocking.'
 Write-Host ''
