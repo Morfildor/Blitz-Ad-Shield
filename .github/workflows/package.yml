@@ -16,6 +16,10 @@ on:
       - 'LICENSE'
   workflow_dispatch:
 
+concurrency:
+  group: blitz-shield-package-main
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -119,5 +123,7 @@ jobs:
           git add -f "dist/Blitz-Ad-Shield-Tray-v$version.zip" dist/latest.json
           if ! git diff --cached --quiet; then
             git commit -m "build: publish Blitz Ad Shield $version and update manifest"
+            git fetch origin main
+            git rebase origin/main
             git push origin HEAD:main
           fi
