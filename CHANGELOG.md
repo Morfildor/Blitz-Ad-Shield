@@ -2,6 +2,19 @@
 
 All notable changes to Blitz Ad Shield are documented here.
 
+## [0.4.0] - 2026-10-29
+
+### Added
+- Automatic GitHub update checks before each launch and every six hours while running.
+- Download and staging of updates without interrupting an active Blitz session.
+- Safe application of pending updates the next time Shield starts with Blitz closed.
+- SHA-256 integrity verification, restricted download URLs, archive file allowlisting, and backups for recovery.
+- "Check for updates" and pending-version information in the system-tray menu.
+- A published `dist/latest.json` manifest generated alongside each versioned Windows ZIP.
+
+### Upgrade note
+- v0.3 users need to install v0.4 once. Future versions will update through the built-in updater.
+
 ## [0.3] - 2026-10-29
 
 ### Fixed
