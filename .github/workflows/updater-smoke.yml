@@ -23,8 +23,17 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $install = Join-Path $env:RUNNER_TEMP 'blitz-shield-update-integration'
           New-Item -ItemType Directory -Path $install -Force | Out-Null
-          Set-Content -LiteralPath (Join-Path $install 'VERSION') -Value '0.3.0' -NoNewline
+          Set-Content -LiteralPath (Join-Path $install 'VERSION') -Value '0.4.0' -NoNewline
           $expected = (Get-Content -Raw VERSION).Trim()
+          # Simulate the existing v0.4 tray app downloading while Blitz is open.
+          & .\Update-Blitz-Ad-Shield.ps1 -Mode Stage -InstallDir $install
+          $stagedVersion = (Get-Content -Raw (Join-Path $install 'VERSION')).Trim()
+          if ($stagedVersion -ne '0.4.0') { throw 'Stage mode modified the running version.' }
+          $pending = Join-Path $env:LOCALAPPDATA 'BlitzAdShield\Updater\pending.json'
+          if (-not (Test-Path -LiteralPath $pending -PathType Leaf)) {
+            throw 'Update was not staged for next launch.'
+          }
+          # Simulate fully closing Blitz and launching Shield again.
           & .\Update-Blitz-Ad-Shield.ps1 -Mode Apply -InstallDir $install
           $actual = (Get-Content -Raw (Join-Path $install 'VERSION')).Trim()
           if ($actual -ne $expected) {
