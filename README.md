@@ -8,7 +8,7 @@
 
 A free, open-source ad blocker for the **Blitz.gg desktop app on Windows**. It blocks known ad requests, cleans up empty ad spaces, and runs quietly in your system tray.
 
-[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.4.0.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
+[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.4.1.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
 
 <sub>Windows 10/11 · No subscription · No installer · MIT License</sub>
 
@@ -32,14 +32,14 @@ Blitz Ad Shield is a small tool I made to deal with that. Launch Blitz through i
 
 ## Installation
 
-1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.4.0.zip)** and extract the ZIP.
+1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.4.1.zip)** and extract the ZIP.
 2. **Quit Blitz completely.** Make sure it's also closed in the Windows system tray.
 3. Open the extracted folder and double-click **`Launch-Blitz-Ad-Shield.vbs`**.
 4. Find the shield icon in your system tray. It might be tucked under the **^** hidden-icons menu.
 
 That's it. Blitz launches with Ad Shield running in the background. You don't need to keep a command window open, just leave the shield running in your tray.
 
-**Tray controls:** Right-click the shield icon to **Start protection**, **Stop protection**, **Open logs folder**, or **Exit Shield**.
+**Tray controls:** Right-click the shield icon to **Start protection**, **Stop protection**, **Open logs folder**, or **Exit Shield**. The menu also shows the installed version, making updates easy to verify.
 
 **Requirements:** Windows 10 or 11, Windows PowerShell 5.1, and the Blitz.gg desktop app.
 
