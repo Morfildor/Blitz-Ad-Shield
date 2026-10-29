@@ -2,6 +2,18 @@
 
 All notable changes to Blitz Ad Shield are documented here.
 
+## [0.3] - 2026-10-29
+
+### Fixed
+- Reconnect to the local Chromium WebSocket after temporary disconnects or Blitz startup changes.
+- Keep Blitz running while the blocker retries a failed connection.
+- Limit repeated connection attempts and include the failing CDP operation and underlying exception in diagnostic logs.
+- Show a reconnecting status in the system tray rather than immediately exiting.
+
+### Notes
+- Blitz versions changed repeatedly in late October 2026. This release improves recovery from connection failures, but compatibility with every updated Blitz build has not been verified.
+- The application does not change Blitz or Riot game files.
+
 ## [0.2] - 2026-10-20
 
 ### Added
