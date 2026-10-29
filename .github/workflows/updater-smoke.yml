@@ -37,16 +37,31 @@ jobs:
           if (-not (Test-Path -LiteralPath $pending -PathType Leaf)) {
             throw 'Update was not staged.'
           }
+          $statusFile = Join-Path $env:LOCALAPPDATA 'BlitzAdShield\Updater\status.json'
+          if (-not (Test-Path -LiteralPath $statusFile -PathType Leaf)) {
+            throw 'Missing update status after staging.'
+          }
+          $stageStatus = Get-Content -LiteralPath $statusFile -Raw | ConvertFrom-Json
+          if ($stageStatus.status -ne 'ready' -or $stageStatus.latestVersion -ne $expected -or -not $stageStatus.checkedAt) {
+            throw 'Staged update status is missing or incorrect.'
+          }
           & .\Update-Blitz-Ad-Shield.ps1 -Mode Apply -InstallDir $install
           $actual = (Get-Content -Raw (Join-Path $install 'VERSION')).Trim()
           if ($actual -ne $expected) { throw "Expected v$expected but installed v$actual" }
           if (Test-Path -LiteralPath $pending -PathType Leaf) { throw 'Updater left pending metadata after installation.' }
+          $finalStatus = Get-Content -LiteralPath $statusFile -Raw | ConvertFrom-Json
+          if ($finalStatus.status -notin @('installed', 'up-to-date') -or $finalStatus.latestVersion -ne $expected) {
+            throw 'Updater did not persist its completed status.'
+          }
           $trayScript = Get-Content -Raw (Join-Path $install 'Blitz-Ad-Shield-Tray.ps1')
           if (-not $trayScript.Contains('Start-AutomaticInstallIfIdle')) {
             throw 'Installed tray script is missing hands-free installation.'
           }
           if (-not $trayScript.Contains('Version: $displayVersion')) {
             throw 'Installed tray script has no version label.'
+          }
+          if (-not $trayScript.Contains('Last check: ') -or -not $trayScript.Contains('Updates: check failed (see logs)')) {
+            throw 'Installed tray script has no update check status display.'
           }
 
           # Exercise the actual background handoff without launching Blitz or a GUI.
