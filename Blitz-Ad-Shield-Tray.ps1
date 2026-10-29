@@ -41,6 +41,15 @@ $script:tray = New-Object System.Windows.Forms.NotifyIcon
 $script:menu = New-Object System.Windows.Forms.ContextMenuStrip
 $script:statusItem = [System.Windows.Forms.ToolStripMenuItem]::new('Status: starting...')
 $script:statusItem.Enabled = $false
+# Display the installed version so updates can be verified without opening files.
+$versionFile = Join-Path $PSScriptRoot 'VERSION'
+$displayVersion = 'unknown'
+if (Test-Path -LiteralPath $versionFile -PathType Leaf) {
+    try { $displayVersion = (Get-Content -LiteralPath $versionFile -Raw -ErrorAction Stop).Trim() }
+    catch { }
+}
+$script:versionItem = [System.Windows.Forms.ToolStripMenuItem]::new("Version: $displayVersion")
+$script:versionItem.Enabled = $false
 $script:startItem = [System.Windows.Forms.ToolStripMenuItem]::new('Start protection')
 $script:stopItem = [System.Windows.Forms.ToolStripMenuItem]::new('Stop protection')
 $script:logsItem = [System.Windows.Forms.ToolStripMenuItem]::new('Open logs folder')
@@ -60,6 +69,7 @@ if (Test-Path -LiteralPath $script:iconFile -PathType Leaf) {
 }
 
 [void]$script:menu.Items.Add($script:statusItem)
+[void]$script:menu.Items.Add($script:versionItem)
 [void]$script:menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 [void]$script:menu.Items.Add($script:startItem)
 [void]$script:menu.Items.Add($script:stopItem)
