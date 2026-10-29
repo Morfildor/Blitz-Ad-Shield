@@ -1,0 +1,38 @@
+name: Windows updater integration test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/updater-smoke.yml'
+      - 'dist/latest.json'
+      - 'Update-Blitz-Ad-Shield.ps1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download, verify, and apply update in temporary directory
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $install = Join-Path $env:RUNNER_TEMP 'blitz-shield-update-integration'
+          New-Item -ItemType Directory -Path $install -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $install 'VERSION') -Value '0.3.0' -NoNewline
+          $expected = (Get-Content -Raw VERSION).Trim()
+          & .\Update-Blitz-Ad-Shield.ps1 -Mode Apply -InstallDir $install
+          $actual = (Get-Content -Raw (Join-Path $install 'VERSION')).Trim()
+          if ($actual -ne $expected) {
+            throw "Updater did not install $expected. Found: $actual"
+          }
+          foreach ($file in @('Update-Blitz-Ad-Shield.ps1', 'Start-Blitz-Ad-Shield.ps1', 'Blitz-Ad-Shield-Tray.ps1')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $install $file) -PathType Leaf)) {
+              throw "Missing installed file: $file"
+            }
+          }
+          Write-Host "Verified updater installed v$actual in an isolated Windows folder."
