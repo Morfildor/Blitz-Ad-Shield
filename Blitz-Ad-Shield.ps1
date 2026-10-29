@@ -1,4 +1,4 @@
-﻿# Blitz Ad Shield v0.2 — local, reversible, no installed-file modifications.
+﻿# Blitz Ad Shield v0.3 — local, reversible, no installed-file modifications.
 # Windows PowerShell 5.1+; no admin rights or dependencies required.
 # This console-based worker also runs hidden under the tray controller.
 param(
@@ -124,7 +124,7 @@ function Find-FreeLoopbackPort {
 }
 
 Write-Host ''
-Write-Host 'Blitz Ad Shield v0.2' -ForegroundColor Cyan
+Write-Host 'Blitz Ad Shield v0.3' -ForegroundColor Cyan
 Write-Host 'Local Chromium request blocker + optional ad-slot hiding.'
 Write-Host 'In console mode, leave this window running; press Ctrl+C to stop blocking.'
 Write-Host ''
@@ -144,36 +144,74 @@ if ($Port -lt 1024 -or $Port -gt 65535) { throw 'Port must be 1024-65535, or 0 f
 $debugUrl = "http://127.0.0.1:$Port/json/version"
 Write-Host "Launching Blitz with localhost-only debug port $Port ..."
 
+$script:ConnectionPhase = 'launching Blitz'
+
+function Format-ConnectionError {
+    param([System.Exception]$Exception)
+    $details = New-Object 'System.Collections.Generic.List[string]'
+    $cursor = $Exception
+    for ($depth = 0; $cursor -and $depth -lt 6; $depth++) {
+        if ($cursor.Message) { [void]$details.Add($cursor.Message) }
+        if ($cursor -is [Net.WebSockets.WebSocketException]) {
+            [void]$details.Add("WebSocket code: $($cursor.WebSocketErrorCode)")
+        }
+        $cursor = $cursor.InnerException
+    }
+    return ($details | Select-Object -Unique) -join ' | '
+}
+
 try {
+    # Launch Blitz just once. Reconnecting the blocker must never restart or terminate the app.
     $blitz = Start-Process -FilePath $BlitzPath -ArgumentList @(
         '--remote-debugging-address=127.0.0.1',
         "--remote-debugging-port=$Port"
     ) -PassThru
 
-    $version = $null
-    for ($attempt = 0; $attempt -lt 60; $attempt++) {
-        Start-Sleep -Milliseconds 350
-        try { $version = Invoke-RestMethod -Uri $debugUrl -TimeoutSec 1; break } catch { }
-        if ($blitz.HasExited) { break }
-    }
-    if (-not $version) {
-        throw 'Blitz did not expose the Chromium debug endpoint. It may ignore this launch flag in your version.'
-    }
+    $startupDeadline = (Get-Date).AddSeconds(35)
+    $hasConnected = $false
+    $failures = 0
+    $maxFailures = 15
 
-    $webSocketUri = [uri]$version.webSocketDebuggerUrl
-    if ($webSocketUri.Scheme -ne 'ws' -or $webSocketUri.Host -notin @('127.0.0.1', 'localhost', '::1')) {
-        throw 'Unexpected debug endpoint. Refusing to connect outside localhost.'
-    }
+    while ($true) {
+        # Blitz sometimes starts a new process during an update. Give the first
+        # launch time to settle, but exit cleanly after a connected session closes.
+        $running = @(Get-Process -Name Blitz -ErrorAction SilentlyContinue).Count -gt 0
+        if (-not $running -and ($hasConnected -or (Get-Date) -gt $startupDeadline)) {
+            Write-Host 'Blitz is closed. Disconnecting the blocker.'
+            break
+        }
+        try {
+            $script:ConnectionPhase = 'reading the local Chromium debug endpoint'
+            $version = Invoke-RestMethod -Uri $debugUrl -TimeoutSec 2 -ErrorAction Stop
+            if (-not $version.webSocketDebuggerUrl) {
+                throw 'The debug endpoint did not return a browser WebSocket URL.'
+            }
+            $webSocketUri = [uri]$version.webSocketDebuggerUrl
+            if ($webSocketUri.Scheme -ne 'ws' -or $webSocketUri.Host -notin @('127.0.0.1', 'localhost', '::1') -or $webSocketUri.Port -ne $Port) {
+                throw 'The debug endpoint is not on the expected localhost port.'
+            }
 
-    $script:Socket = [Net.WebSockets.ClientWebSocket]::new()
-    $script:Socket.ConnectAsync($webSocketUri, $script:Cancel).GetAwaiter().GetResult() | Out-Null
-    Send-CdpCommand -Method 'Target.setAutoAttach' -Params @{
-        autoAttach = $true
-        waitForDebuggerOnStart = $false
-        flatten = $true
-    }
-    Write-Host 'Connected. Blocking known advertising networks...' -ForegroundColor Green
+            $script:CommandNames.Clear()
+            $script:Sequence = 0
+            $script:PagesAttached = 0
+            $script:Socket = [Net.WebSockets.ClientWebSocket]::new()
+            $script:ConnectionPhase = 'opening the Chromium WebSocket'
+            $script:Socket.ConnectAsync($webSocketUri, $script:Cancel).GetAwaiter().GetResult() | Out-Null
+            $script:ConnectionPhase = 'enabling automatic target attachment'
+            Send-CdpCommand -Method 'Target.setAutoAttach' -Params @{
+                autoAttach = $true
+                waitForDebuggerOnStart = $false
+                flatten = $true
+            }
 
+            if ($hasConnected) {
+                Write-Host 'Reconnected to Blitz. Blocking known advertising networks...' -ForegroundColor Green
+            } else {
+                Write-Host 'Connected. Blocking known advertising networks...' -ForegroundColor Green
+            }
+            $hasConnected = $true
+            $failures = 0
+            $script:ConnectionPhase = 'receiving Chromium messages'
     while ($script:Socket.State -eq [Net.WebSockets.WebSocketState]::Open) {
         $raw = Receive-CdpMessage
         if (-not $raw) { break }
@@ -224,13 +262,41 @@ try {
             }
         }
     }
+
+            if (-not (Get-Process -Name Blitz -ErrorAction SilentlyContinue)) {
+                Write-Host 'Blitz is closed. Disconnecting the blocker.'
+                break
+            }
+            throw 'Chromium closed the WebSocket connection.'
+        }
+        catch {
+            $failures++
+            $reason = Format-ConnectionError -Exception $_.Exception
+            $phase = $script:ConnectionPhase
+            Write-Warning ("Connection attempt {0}/{1} failed during {2}: {3}" -f $failures, $maxFailures, $phase, $reason)
+            if ($failures -ge $maxFailures) {
+                throw ("Unable to keep the Chromium WebSocket connected after {0} attempts. Last failure during {1}: {2}" -f $maxFailures, $phase, $reason)
+            }
+            Write-Host 'Reconnecting to Blitz...'
+        }
+        finally {
+            if ($null -ne $script:Socket) {
+                try { $script:Socket.Dispose() } catch { }
+                $script:Socket = $null
+            }
+        }
+        # A short backoff handles temporary restarts without hammering the local endpoint.
+        Start-Sleep -Milliseconds ([Math]::Min(2000, 400 * $failures))
+    }
 }
 catch {
-    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host ("Error: {0}" -f (Format-ConnectionError -Exception $_.Exception)) -ForegroundColor Red
     exit 1
 }
 finally {
-    if ($script:Socket) { $script:Socket.Dispose() }
+    if ($null -ne $script:Socket) {
+        try { $script:Socket.Dispose() } catch { }
+    }
     Write-Host "Disconnected. Observed blocked requests: $($script:BlocksObserved)."
     Write-Host 'Blitz was not modified. Restart Blitz normally to run without this tool.'
 }
