@@ -24,15 +24,22 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $install = Join-Path $env:RUNNER_TEMP 'blitz-shield-update-integration'
           New-Item -ItemType Directory -Path $install -Force | Out-Null
-          Set-Content -LiteralPath (Join-Path $install 'VERSION') -Value '0.4.1' -NoNewline
+          Set-Content -LiteralPath (Join-Path $install 'VERSION') -Value '0.5.0' -NoNewline
           $expected = (Get-Content -Raw VERSION).Trim()
-          $published = Invoke-RestMethod -Uri "https://raw.githubusercontent.com/Morfildor/Blitz-Ad-Shield/main/dist/latest.json?smoke=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" -TimeoutSec 20
-          if ([string]$published.version -ne $expected -or [version]$expected -le [version]'0.4.1') {
-            throw "Published manifest does not offer a newer version than v0.4.1"
+          $published = $null
+          for ($attempt = 0; $attempt -lt 12; $attempt++) {
+            $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            $published = Invoke-RestMethod -Uri "https://raw.githubusercontent.com/Morfildor/Blitz-Ad-Shield/main/dist/latest.json?smoke=$cacheBust" -TimeoutSec 20
+            Write-Host "Published version: $($published.version); expected: $expected"
+            if ([string]$published.version -eq $expected) { break }
+            Start-Sleep -Seconds 5
+          }
+          if ([string]$published.version -ne $expected -or [version]$expected -le [version]'0.5.0') {
+            throw "Published manifest does not offer a newer version than v0.5.0"
           }
           & .\Update-Blitz-Ad-Shield.ps1 -Mode Stage -InstallDir $install
           $stagedVersion = (Get-Content -Raw (Join-Path $install 'VERSION')).Trim()
-          if ($stagedVersion -ne '0.4.1') { throw 'Stage mode changed the active version.' }
+          if ($stagedVersion -ne '0.5.0') { throw 'Stage mode changed the active version.' }
           $pending = Join-Path $env:LOCALAPPDATA 'BlitzAdShield\Updater\pending.json'
           if (-not (Test-Path -LiteralPath $pending -PathType Leaf)) {
             throw 'Update was not staged.'
@@ -86,4 +93,4 @@ jobs:
           if ($record -cne "True|$fakeBlitzPath") {
             throw "Auto-launcher did not preserve NoAutoStart and BlitzPath: $record"
           }
-          Write-Host "Verified v0.4.1 -> v$actual download, install, and passive tray relaunch."
+          Write-Host "Verified v0.5.0 -> v$actual download, install, and passive tray relaunch."
