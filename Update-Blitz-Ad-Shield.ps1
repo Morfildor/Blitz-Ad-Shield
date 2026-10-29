@@ -62,6 +62,7 @@ function Confirm-PackageHash {
 function Test-ZipContents {
     param([string]$Path, [string]$Version)
     Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::OpenRead($Path)
     try {
         $names = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
@@ -135,6 +136,7 @@ function Install-Pending {
     [void][IO.Directory]::CreateDirectory($backup)
 
     Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::OpenRead($zip)
     try {
         foreach ($entry in $archive.Entries) {
