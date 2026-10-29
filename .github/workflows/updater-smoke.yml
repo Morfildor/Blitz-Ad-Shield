@@ -24,7 +24,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $install = Join-Path $env:RUNNER_TEMP 'blitz-shield-update-integration'
           New-Item -ItemType Directory -Path $install -Force | Out-Null
-          Set-Content -LiteralPath (Join-Path $install 'VERSION') -Value '0.5.0' -NoNewline
+          Set-Content -LiteralPath (Join-Path $install 'VERSION') -Value '0.5.1' -NoNewline
           $expected = (Get-Content -Raw VERSION).Trim()
           $published = $null
           for ($attempt = 0; $attempt -lt 12; $attempt++) {
@@ -34,12 +34,12 @@ jobs:
             if ([string]$published.version -eq $expected) { break }
             Start-Sleep -Seconds 5
           }
-          if ([string]$published.version -ne $expected -or [version]$expected -le [version]'0.5.0') {
-            throw "Published manifest does not offer a newer version than v0.5.0"
+          if ([string]$published.version -ne $expected -or [version]$expected -le [version]'0.5.1') {
+            throw "Published manifest does not offer a newer version than v0.5.1"
           }
           & .\Update-Blitz-Ad-Shield.ps1 -Mode Stage -InstallDir $install
           $stagedVersion = (Get-Content -Raw (Join-Path $install 'VERSION')).Trim()
-          if ($stagedVersion -ne '0.5.0') { throw 'Stage mode changed the active version.' }
+          if ($stagedVersion -ne '0.5.1') { throw 'Stage mode changed the active version.' }
           $pending = Join-Path $env:LOCALAPPDATA 'BlitzAdShield\Updater\pending.json'
           if (-not (Test-Path -LiteralPath $pending -PathType Leaf)) {
             throw 'Update was not staged.'
@@ -93,4 +93,53 @@ jobs:
           if ($record -cne "True|$fakeBlitzPath") {
             throw "Auto-launcher did not preserve NoAutoStart and BlitzPath: $record"
           }
-          Write-Host "Verified v0.5.0 -> v$actual download, install, and passive tray relaunch."
+          # Test the one-time restart decision independently of the Windows GUI.
+          # On Windows PowerShell 5.1 we can extract this pure function using its AST.
+          $tokens = $null
+          $errors = $null
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $env:GITHUB_WORKSPACE 'Blitz-Ad-Shield-Tray.ps1'),
+            [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) { throw 'Tray script has parse errors.' }
+          $func = $ast.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $node.Name -eq 'Test-RecentAutomaticUpdate'
+          }, $true)
+          if ($null -eq $func) { throw 'Restart decision function not found.' }
+          . ([scriptblock]::Create($func.Extent.Text))
+
+          $versionPath = Join-Path $install 'VERSION'
+          $markerPath = Join-Path $install 'test-last-auto-install.json'
+          $stamp = (Get-Date).ToUniversalTime().AddSeconds(-10)
+          @{version=$expected;timestamp=$stamp.ToString('o')} |
+            ConvertTo-Json | Set-Content -LiteralPath $markerPath -Encoding UTF8
+          if (-not (Test-RecentAutomaticUpdate -VersionPath $versionPath -MarkerPath $markerPath -RestartEnabled $true)) {
+            throw 'Successful update should relaunch Blitz when setting is on.'
+          }
+          if (Test-Path -LiteralPath $markerPath) { throw 'Consumed restart marker was not removed.' }
+          if (Test-RecentAutomaticUpdate -VersionPath $versionPath -MarkerPath $markerPath -RestartEnabled $true) {
+            throw 'Restart marker was reused.'
+          }
+          @{version=$expected;timestamp=$stamp.ToString('o')} |
+            ConvertTo-Json | Set-Content -LiteralPath $markerPath -Encoding UTF8
+          if (Test-RecentAutomaticUpdate -VersionPath $versionPath -MarkerPath $markerPath -RestartEnabled $false) {
+            throw 'Disabled restart preference ignored.'
+          }
+          if (Test-Path -LiteralPath $markerPath) { throw 'Disabled restart did not consume marker.' }
+          @{version=$expected;timestamp=(Get-Date).ToUniversalTime().AddMinutes(-7).ToString('o')} |
+            ConvertTo-Json | Set-Content -LiteralPath $markerPath -Encoding UTF8
+          if (Test-RecentAutomaticUpdate -VersionPath $versionPath -MarkerPath $markerPath -RestartEnabled $true) {
+            throw 'Stale update triggered an unwanted Blitz restart.'
+          }
+          @{version='99.0.0';timestamp=$stamp.ToString('o')} |
+            ConvertTo-Json | Set-Content -LiteralPath $markerPath -Encoding UTF8
+          if (Test-RecentAutomaticUpdate -VersionPath $versionPath -MarkerPath $markerPath -RestartEnabled $true) {
+            throw 'Mismatched version triggered an unwanted Blitz restart.'
+          }
+          $traySource = Get-Content -LiteralPath (Join-Path $install 'Blitz-Ad-Shield-Tray.ps1') -Raw
+          if (-not $traySource.Contains('if ($NoAutoStart -and -not $relaunch)') -or
+              -not $traySource.Contains('Restart Blitz after updates')) {
+            throw 'Tray does not route successful updates to automatic Blitz launch.'
+          }
+          Write-Host "Verified v0.5.1 -> v$actual download, install, tray handoff, and restart decision."
