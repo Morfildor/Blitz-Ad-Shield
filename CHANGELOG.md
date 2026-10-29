@@ -2,6 +2,15 @@
 
 All notable changes to Blitz Ad Shield are documented here.
 
+## [0.4.1] - 2026-10-29
+
+### Added
+- Installed version shown in the system-tray menu, making it easy to verify successful automatic updates.
+- Windows integration test of a v0.4.0 staged download and installation after restarting.
+
+### Notes
+- No changes to ad filtering in this release.
+
 ## [0.4.0] - 2026-10-29
 
 ### Added
