@@ -2,6 +2,16 @@
 
 All notable changes to Blitz Ad Shield are documented here.
 
+## [0.5.1] - 2026-10-29
+
+### Improved
+- Tray menu now displays the result and local time of the last GitHub update check.
+- Clear status messages for up to date, downloaded updates, and failed checks.
+- A failed update check does not interrupt ad blocking or hide a previously downloaded update.
+
+### Notes
+- No changes to ad filtering or game integration.
+
 ## [0.5.0] - 2026-10-29
 
 ### Changed
