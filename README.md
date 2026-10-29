@@ -8,7 +8,7 @@
 
 A free, open-source ad blocker for the **Blitz.gg desktop app on Windows**. It blocks known ad requests, cleans up empty ad spaces, and runs quietly in your system tray.
 
-[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.3.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
+[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.4.0.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
 
 <sub>Windows 10/11 · No subscription · No installer · MIT License</sub>
 
@@ -32,7 +32,7 @@ Blitz Ad Shield is a small tool I made to deal with that. Launch Blitz through i
 
 ## Installation
 
-1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.3.zip)** and extract the ZIP.
+1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.4.0.zip)** and extract the ZIP.
 2. **Quit Blitz completely.** Make sure it's also closed in the Windows system tray.
 3. Open the extracted folder and double-click **`Launch-Blitz-Ad-Shield.vbs`**.
 4. Find the shield icon in your system tray. It might be tucked under the **^** hidden-icons menu.
@@ -55,6 +55,19 @@ If Blitz is installed somewhere unusual, start `Blitz-Ad-Shield-Tray.ps1` in Pow
 ```
 
 </details>
+
+## 🔄 Automatic updates
+
+Starting with **v0.4**, Ad Shield takes care of its own updates from this GitHub repository.
+
+- **On launch:** It checks for a newer version and installs it before Blitz starts.
+- **While you're playing:** It checks again every six hours. New updates download in the background.
+- **At your next launch:** Any downloaded update is installed automatically after you fully close Blitz. Your current session is never interrupted.
+- **From the tray:** Right-click the shield and choose **Check for updates** at any time.
+
+Downloads come from this repository over HTTPS and are checked against a published **SHA-256 checksum**. If GitHub is unavailable or an update fails verification, Ad Shield continues using your current version. Previous files are backed up locally.
+
+**Upgrading from v0.3 or earlier?** Download and extract v0.4 manually once. After that, future releases update automatically. Keep using the same extracted folder instead of downloading a fresh ZIP for every release.
 
 ## ⚙️ How it works
 
