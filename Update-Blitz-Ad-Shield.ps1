@@ -15,6 +15,7 @@ $script:SourceBase = 'https://raw.githubusercontent.com/Morfildor/Blitz-Ad-Shiel
 $script:ManifestUrl = "$($script:SourceBase)/latest.json"
 $script:UpdateDir = Join-Path $env:LOCALAPPDATA 'BlitzAdShield\Updater'
 $script:PendingMetadata = Join-Path $script:UpdateDir 'pending.json'
+$script:StatusPath = Join-Path $script:UpdateDir 'status.json'
 $script:Files = @(
     'Blitz-Ad-Shield.ps1',
     'Blitz-Ad-Shield-Tray.ps1',
@@ -28,6 +29,31 @@ $script:Files = @(
     'README.md',
     'LICENSE'
 )
+
+function Write-UpdateStatus {
+    param(
+        [ValidateSet('up-to-date', 'ready', 'installed', 'error')][string]$State,
+        [string]$LatestVersion = ''
+    )
+    # Status is informational only. Failure to save it must not break updates.
+    $temporary = $null
+    try {
+        [void][IO.Directory]::CreateDirectory($script:UpdateDir)
+        $temporary = Join-Path $script:UpdateDir "status-$([guid]::NewGuid().ToString('N')).tmp"
+        [ordered]@{
+            status = $State
+            checkedAt = (Get-Date).ToUniversalTime().ToString('o')
+            latestVersion = $LatestVersion
+        } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $temporary -Encoding UTF8
+        Move-Item -LiteralPath $temporary -Destination $script:StatusPath -Force
+    }
+    catch { Write-Warning "Could not save update status: $($_.Exception.Message)" }
+    finally {
+        if ($temporary) {
+            Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 
 function Get-InstalledVersion {
     $path = Join-Path $InstallDir 'VERSION'
@@ -222,17 +248,27 @@ try {
             }
             if ($Mode -eq 'Apply' -and -not (Get-Process -Name Blitz -ErrorAction SilentlyContinue)) {
                 Install-Pending -Manifest $manifest
+                if ((Get-InstalledVersion) -ge $remoteVersion) {
+                    Write-UpdateStatus -State 'installed' -LatestVersion ([string]$remoteVersion)
+                } else {
+                    Write-UpdateStatus -State 'ready' -LatestVersion ([string]$remoteVersion)
+                }
+            } else {
+                Write-UpdateStatus -State 'ready' -LatestVersion ([string]$remoteVersion)
             }
         } else {
             Write-Output "Blitz Ad Shield is up to date (v$installedVersion)."
+            Write-UpdateStatus -State 'up-to-date' -LatestVersion ([string]$remoteVersion)
         }
     }
     catch {
         # An unavailable network must never stop Blitz from starting.
+        Write-UpdateStatus -State 'error'
         Write-Warning "Update check skipped: $($_.Exception.Message)"
     }
 }
 catch {
+    Write-UpdateStatus -State 'error'
     Write-Warning "Updater could not finish: $($_.Exception.Message)"
 }
 finally {
