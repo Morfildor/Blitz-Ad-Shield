@@ -30,6 +30,19 @@ $script:updateProcess = $null
 $script:notifiedVersion = ''
 $script:automaticInstallScheduled = $false
 $script:autoInstallStamp = Join-Path $script:updateStateDir 'last-auto-install.json'
+$script:settingsFile = Join-Path (Join-Path $env:LOCALAPPDATA 'BlitzAdShield') 'settings.json'
+$script:restartBlitzAfterUpdates = $true
+if (Test-Path -LiteralPath $script:settingsFile -PathType Leaf) {
+    try {
+        $preferences = Get-Content -LiteralPath $script:settingsFile -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($preferences.PSObject.Properties.Name -contains 'restartBlitzAfterUpdates' -and
+            $preferences.restartBlitzAfterUpdates -is [bool]) {
+            $script:restartBlitzAfterUpdates = [bool]$preferences.restartBlitzAfterUpdates
+        }
+    } catch {
+        # Use the default if settings are unreadable.
+    }
+}
 
 # Only one controller per logged-in Windows session.
 $createdNew = $false
@@ -57,6 +70,9 @@ $script:startItem = [System.Windows.Forms.ToolStripMenuItem]::new('Start protect
 $script:stopItem = [System.Windows.Forms.ToolStripMenuItem]::new('Stop protection')
 $script:logsItem = [System.Windows.Forms.ToolStripMenuItem]::new('Open logs folder')
 $script:checkUpdatesItem = [System.Windows.Forms.ToolStripMenuItem]::new('Check for updates')
+$script:restartBlitzItem = [System.Windows.Forms.ToolStripMenuItem]::new('Restart Blitz after updates')
+$script:restartBlitzItem.CheckOnClick = $true
+$script:restartBlitzItem.Checked = $script:restartBlitzAfterUpdates
 $script:updateInfoItem = [System.Windows.Forms.ToolStripMenuItem]::new('Updates: automatic')
 $script:updateInfoItem.Enabled = $false
 $script:lastCheckedItem = [System.Windows.Forms.ToolStripMenuItem]::new('Last check: not yet')
@@ -80,6 +96,7 @@ if (Test-Path -LiteralPath $script:iconFile -PathType Leaf) {
 [void]$script:menu.Items.Add($script:stopItem)
 [void]$script:menu.Items.Add($script:logsItem)
 [void]$script:menu.Items.Add($script:checkUpdatesItem)
+[void]$script:menu.Items.Add($script:restartBlitzItem)
 [void]$script:menu.Items.Add($script:updateInfoItem)
 [void]$script:menu.Items.Add($script:lastCheckedItem)
 [void]$script:menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
@@ -204,6 +221,43 @@ function Start-UpdateCheck {
     }
 }
 
+function Test-RecentAutomaticUpdate {
+    param(
+        [Parameter(Mandatory = $true)][string]$VersionPath,
+        [Parameter(Mandatory = $true)][string]$MarkerPath,
+        [bool]$RestartEnabled = $true
+    )
+    if (-not (Test-Path -LiteralPath $VersionPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $MarkerPath -PathType Leaf)) {
+        return $false
+    }
+    try {
+        $marker = Get-Content -LiteralPath $MarkerPath -Raw -ErrorAction Stop | ConvertFrom-Json
+        $installedVersion = (Get-Content -LiteralPath $VersionPath -Raw -ErrorAction Stop).Trim()
+        $targetVersion = [string]$marker.version
+        if ($installedVersion -notmatch '^\d+\.\d+\.\d+$' -or $targetVersion -notmatch '^\d+\.\d+\.\d+$') {
+            return $false
+        }
+        if ($installedVersion -cne $targetVersion) { return $false }
+
+        $startedUtc = [DateTimeOffset]::Parse([string]$marker.timestamp).UtcDateTime
+        $elapsed = ((Get-Date).ToUniversalTime() - $startedUtc).TotalMinutes
+        if ($elapsed -lt 0 -or $elapsed -gt 5) { return $false }
+
+        # VERSION must have been replaced after the old tray initiated the handoff.
+        # This also prevents rebooting Blitz after a failed update.
+        $versionWriteUtc = (Get-Item -LiteralPath $VersionPath).LastWriteTimeUtc
+        if ($versionWriteUtc -lt $startedUtc.AddSeconds(-2)) { return $false }
+
+        # Consume the one-time handoff marker to prevent repeated launches.
+        Remove-Item -LiteralPath $MarkerPath -Force -ErrorAction Stop
+        return $RestartEnabled
+    }
+    catch {
+        return $false
+    }
+}
+
 function Start-AutomaticInstallIfIdle {
     if ($script:shuttingDown -or $script:automaticInstallScheduled) { return }
     if (Get-Process -Name Blitz -ErrorAction SilentlyContinue) { return }
@@ -306,7 +360,9 @@ function Poll-Updates {
                     $updateText = "Updates: v$pendingVersion downloaded"
                     if ($script:notifiedVersion -ne $pendingVersion) {
                         $script:notifiedVersion = $pendingVersion
-                        Show-ShieldNotice "Update v$pendingVersion downloaded. It will install automatically after Blitz closes."
+                        $restartNote = 'and keep the tray running'
+                        if ($script:restartBlitzAfterUpdates) { $restartNote = 'and restart Blitz' }
+                        Show-ShieldNotice "Update v$pendingVersion downloaded. It will install $restartNote after Blitz closes."
                     }
                 }
             } catch { }
@@ -325,6 +381,23 @@ $script:stopItem.Add_Click({
     Show-ShieldNotice 'Blocking stopped. Fully quit Blitz to close its debugging port; restart Blitz through Shield to resume.'
 })
 $script:checkUpdatesItem.Add_Click({ Start-UpdateCheck })
+$script:restartBlitzItem.Add_Click({
+    $script:restartBlitzAfterUpdates = [bool]$script:restartBlitzItem.Checked
+    try {
+        $parent = Split-Path -Parent $script:settingsFile
+        [void][IO.Directory]::CreateDirectory($parent)
+        $tmp = Join-Path $parent ("settings-" + [guid]::NewGuid().ToString('N') + ".tmp")
+        try {
+            @{ restartBlitzAfterUpdates = $script:restartBlitzAfterUpdates } |
+                ConvertTo-Json | Set-Content -LiteralPath $tmp -Encoding UTF8
+            Move-Item -LiteralPath $tmp -Destination $script:settingsFile -Force
+        }
+        finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+    }
+    catch {
+        Show-ShieldNotice 'Restart preference could not be saved. It may reset next time.' $true
+    }
+})
 $script:logsItem.Add_Click({
     [void][IO.Directory]::CreateDirectory($script:logDir)
     Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $script:logDir) | Out-Null
@@ -381,7 +454,11 @@ $script:timer.Add_Tick({
 
 try {
     $script:timer.Start()
+    $relaunch = $false
     if ($NoAutoStart) {
+        $relaunch = Test-RecentAutomaticUpdate -VersionPath $versionFile -MarkerPath $script:autoInstallStamp -RestartEnabled $script:restartBlitzAfterUpdates
+    }
+    if ($NoAutoStart -and -not $relaunch) {
         Set-TrayStatus 'Ready to launch Blitz'
     } else {
         Start-Shield
