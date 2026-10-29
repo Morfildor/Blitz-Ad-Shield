@@ -65,7 +65,7 @@ function Test-ZipContents {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::OpenRead($Path)
     try {
-        $names = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+        $names = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         $totalBytes = [long]0
         foreach ($entry in $archive.Entries) {
             if (-not $entry.FullName.StartsWith('Blitz-Ad-Shield/', [StringComparison]::Ordinal)) {
@@ -177,7 +177,7 @@ function Install-Pending {
         Write-Output "Installed Blitz Ad Shield v$version. Previous files saved in $backup"
     }
     catch {
-        foreach ($name in $installed) {
+        foreach ($name in $script:Files) {
             $original = Join-Path $backup $name
             $existing = Join-Path $InstallDir $name
             if (Test-Path -LiteralPath $original -PathType Leaf) {
