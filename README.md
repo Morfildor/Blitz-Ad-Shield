@@ -8,7 +8,7 @@
 
 A free, open-source ad blocker for the **Blitz.gg desktop app on Windows**. It blocks known ad requests, cleans up empty ad spaces, and runs quietly in your system tray.
 
-[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
+[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.3.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
 
 <sub>Windows 10/11 · No subscription · No installer · MIT License</sub>
 
@@ -32,7 +32,7 @@ Blitz Ad Shield is a small tool I made to deal with that. Launch Blitz through i
 
 ## Installation
 
-1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.2.zip)** and extract the ZIP.
+1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.3.zip)** and extract the ZIP.
 2. **Quit Blitz completely.** Make sure it's also closed in the Windows system tray.
 3. Open the extracted folder and double-click **`Launch-Blitz-Ad-Shield.vbs`**.
 4. Find the shield icon in your system tray. It might be tucked under the **^** hidden-icons menu.
@@ -66,9 +66,11 @@ It doesn't modify game files, change your DNS settings, or install a system-wide
 
 ## Troubleshooting
 
+**Blitz updated and Shield no longer connects?** Download the newest v0.3 ZIP above, fully exit Blitz and any existing Ad Shield tray process, then extract and start the new version. v0.3 reconnects after transient WebSocket disconnects and includes detailed connection errors in the logs.
+
 If Blitz doesn't start, make sure it's completely closed before launching Shield again. If the tray icon isn't visible, check the hidden-icons menu. If your PC blocks the VBScript launcher, use the CMD alternative above.
 
-For other problems, [open a GitHub issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues). Include your Windows and Blitz versions, along with what happened. Please remove sensitive URLs or other private information from logs before sharing them.
+For other problems, open **Tray icon > Open logs folder** and check the latest `shield-...-errors.log` and `shield-....log`. [Report the problem](https://github.com/Morfildor/Blitz-Ad-Shield/issues) with your Windows and Blitz versions and the connection phase shown in the error. Remove private URLs or other sensitive details before sharing logs.
 
 ## A note about security
 
