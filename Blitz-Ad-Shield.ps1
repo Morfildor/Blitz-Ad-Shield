@@ -88,6 +88,7 @@ function Send-CdpCommand {
     if ($SessionId) { $payload['sessionId'] = $SessionId }
     $bytes = [Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 8 -Compress))
     $script:CommandNames[[string]$id] = $Method
+    $script:ConnectionPhase = "sending $Method"
     $script:Socket.SendAsync(
         [ArraySegment[byte]]::new($bytes),
         [Net.WebSockets.WebSocketMessageType]::Text,
@@ -97,6 +98,7 @@ function Send-CdpCommand {
 }
 
 function Receive-CdpMessage {
+    $script:ConnectionPhase = 'receiving Chromium messages'
     $stream = [IO.MemoryStream]::new()
     try {
         do {
@@ -170,6 +172,7 @@ try {
     $startupDeadline = (Get-Date).AddSeconds(35)
     $hasConnected = $false
     $failures = 0
+    $lastConnectedAt = $null
     $maxFailures = 15
 
     while ($true) {
@@ -210,7 +213,7 @@ try {
                 Write-Host 'Connected. Blocking known advertising networks...' -ForegroundColor Green
             }
             $hasConnected = $true
-            $failures = 0
+            $lastConnectedAt = Get-Date
             $script:ConnectionPhase = 'receiving Chromium messages'
     while ($script:Socket.State -eq [Net.WebSockets.WebSocketState]::Open) {
         $raw = Receive-CdpMessage
@@ -270,6 +273,12 @@ try {
             throw 'Chromium closed the WebSocket connection.'
         }
         catch {
+            # A connection that stayed healthy for 15 seconds is not part of a
+            # rapid crash loop. Reset the retry counter only for stable sessions.
+            if ($null -ne $lastConnectedAt -and ((Get-Date) - $lastConnectedAt).TotalSeconds -ge 15) {
+                $failures = 0
+            }
+            $lastConnectedAt = $null
             $failures++
             $reason = Format-ConnectionError -Exception $_.Exception
             $phase = $script:ConnectionPhase
