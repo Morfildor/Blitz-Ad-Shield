@@ -137,7 +137,7 @@ jobs:
           if (Test-RecentAutomaticUpdate -VersionPath $versionPath -MarkerPath $markerPath -RestartEnabled $true) {
             throw 'Mismatched version triggered an unwanted Blitz restart.'
           }
-          $traySource = Get-Content -LiteralPath (Join-Path $install 'Blitz-Ad-Shield-Tray.ps1') -Raw
+          $traySource = $trayScript # Check the actual installed source, not the temporary test stub.
           if (-not $traySource.Contains('if ($NoAutoStart -and -not $relaunch)') -or
               -not $traySource.Contains('Restart Blitz after updates')) {
             throw 'Tray does not route successful updates to automatic Blitz launch.'
