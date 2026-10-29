@@ -6,6 +6,7 @@ All notable changes to Blitz Ad Shield are documented here.
 
 ### Fixed
 - Reconnect to the local Chromium WebSocket after temporary disconnects or Blitz startup changes.
+- Add a restricted localhost Origin to the CDP WebSocket handshake and matching Chromium launch flag for newer browser builds.
 - Keep Blitz running while the blocker retries a failed connection.
 - Limit repeated connection attempts and include the failing CDP operation and underlying exception in diagnostic logs.
 - Show a reconnecting status in the system tray rather than immediately exiting.
