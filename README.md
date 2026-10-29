@@ -8,7 +8,7 @@
 
 A free, open-source ad blocker for the **Blitz.gg desktop app on Windows**. It blocks known ad requests, cleans up empty ad spaces, and runs quietly in your system tray.
 
-[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.5.1.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
+[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.5.2.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
 
 <sub>Windows 10/11 · No subscription · No installer · MIT License</sub>
 
@@ -32,14 +32,14 @@ Blitz Ad Shield is a small tool I made to deal with that. Launch Blitz through i
 
 ## Installation
 
-1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.5.1.zip)** and extract the ZIP.
+1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.5.2.zip)** and extract the ZIP.
 2. **Quit Blitz completely.** Make sure it's also closed in the Windows system tray.
 3. Open the extracted folder and double-click **`Launch-Blitz-Ad-Shield.vbs`**.
 4. Find the shield icon in your system tray. It might be tucked under the **^** hidden-icons menu.
 
 That's it. Blitz launches with Ad Shield running in the background. You don't need to keep a command window open, just leave the shield running in your tray.
 
-**Tray controls:** Right-click the shield icon for **Start protection**, **Stop protection**, **Check for updates**, **Open logs folder**, or **Exit Shield**. It also shows your installed version, update status, and when GitHub was last checked.
+**Tray controls:** Right-click the shield icon for **Start protection**, **Stop protection**, **Check for updates**, **Open logs folder**, and **Exit Shield**. You can also turn **Restart Blitz after updates** on or off. The menu shows your installed version, update status, and last check time.
 
 **Requirements:** Windows 10 or 11, Windows PowerShell 5.1, and the Blitz.gg desktop app.
 
@@ -62,12 +62,12 @@ Starting with **v0.4**, Ad Shield takes care of its own updates from this GitHub
 
 - **On launch:** Shield checks GitHub and installs any available update before starting Blitz.
 - **While you're playing:** It checks again every six hours and downloads newer releases quietly.
-- **After Blitz closes:** From **v0.5**, Shield installs a downloaded update on its own, restarts its tray icon, and stays ready for your next session. It won't reopen Blitz unexpectedly.
+- **After Blitz closes:** Shield installs the downloaded update and restarts its tray icon. From **v0.5.2**, it also reopens Blitz with ad blocking enabled, if **Restart Blitz after updates** is checked in the tray menu. The option is enabled by default and can be disabled anytime.
 - **From the tray:** Choose **Check for updates** at any time. The menu shows **Up to date**, **Downloaded**, or **Check failed**, along with the most recent check time. A failed check never disables ad blocking.
 
 Downloads come from this repository over HTTPS and are checked against a published **SHA-256 checksum**. If GitHub is unavailable or an update fails verification, Ad Shield continues using your current version. Previous files are backed up locally.
 
-**On v0.4 or v0.4.1?** You'll receive v0.5 through the existing updater the next time you launch Shield with Blitz closed. From then on, you won't need to close the tray app or relaunch it just to apply updates. You do still need to exit Blitz normally at some point, because Shield won't interrupt a running game. If Blitz stays open in its tray indefinitely, the update remains safely queued.
+**Already using v0.5 or newer?** Your next update will install automatically after Blitz closes. With v0.5.2, Blitz can then relaunch automatically. Shield never force-closes Blitz or interrupts an active game. If Blitz keeps running in its own system tray, the update stays queued until it fully exits.
 
 ## ⚙️ How it works
 
