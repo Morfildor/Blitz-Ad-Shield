@@ -173,12 +173,19 @@ $script:exitItem.Add_Click({
 $script:timer.Add_Tick({
     if ($null -eq $script:worker) { return }
     if (Worker-IsRunning) {
-        if (-not $script:connected -and $script:stdoutPath -and (Test-Path -LiteralPath $script:stdoutPath)) {
+        if ($script:stdoutPath -and (Test-Path -LiteralPath $script:stdoutPath)) {
             try {
                 $tail = @(Get-Content -LiteralPath $script:stdoutPath -Tail 12 -ErrorAction Stop)
-                if ($tail -match 'Connected\. Blocking known advertising networks') {
-                    $script:connected = $true
-                    Set-TrayStatus 'Protection connected'
+                # Use the latest connection event. Older messages may still be in the tail.
+                $events = @($tail | Where-Object { $_ -match '(?i)^(Reconnecting to Blitz|Connected\.|Reconnected to Blitz)' })
+                if ($events.Count -gt 0) {
+                    $latest = [string]$events[-1]
+                    if ($latest -match '^Reconnecting to Blitz') {
+                        Set-TrayStatus 'Reconnecting to Blitz...'
+                    } else {
+                        $script:connected = $true
+                        Set-TrayStatus 'Protection connected'
+                    }
                 }
             } catch { }
         }
