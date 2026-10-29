@@ -2,6 +2,18 @@
 
 All notable changes to Blitz Ad Shield are documented here.
 
+## [0.5.2] - 2026-10-29
+
+### Added
+- Optional automatic Blitz relaunch immediately after a successfully installed background update.
+- A persistent **Restart Blitz after updates** checkbox in the system-tray menu, enabled by default.
+- One-time update verification prevents relaunching Blitz following a failed update or unrelated tray restart.
+- Windows tests for successful relaunch, disabled preference, stale update markers, and mismatched versions.
+
+### Notes
+- Updates still wait for Blitz to exit naturally. Shield never force-closes the game.
+- The first update from v0.5.1 also supports relaunch using the existing handoff marker.
+
 ## [0.5.1] - 2026-10-29
 
 ### Improved
