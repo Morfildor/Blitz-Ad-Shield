@@ -7,6 +7,7 @@ on:
       - '.github/workflows/updater-smoke.yml'
       - 'dist/latest.json'
       - 'Update-Blitz-Ad-Shield.ps1'
+      - 'Start-Blitz-Ad-Shield.ps1'
   workflow_dispatch:
 
 permissions:
@@ -17,39 +18,57 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download, verify, and apply update in temporary directory
+      - name: Stage v0.5, install, and verify automatic tray relaunch
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $install = Join-Path $env:RUNNER_TEMP 'blitz-shield-update-integration'
           New-Item -ItemType Directory -Path $install -Force | Out-Null
-          Set-Content -LiteralPath (Join-Path $install 'VERSION') -Value '0.4.0' -NoNewline
+          Set-Content -LiteralPath (Join-Path $install 'VERSION') -Value '0.4.1' -NoNewline
           $expected = (Get-Content -Raw VERSION).Trim()
           $published = Invoke-RestMethod -Uri "https://raw.githubusercontent.com/Morfildor/Blitz-Ad-Shield/main/dist/latest.json?smoke=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" -TimeoutSec 20
-          if ([string]$published.version -ne $expected -or [version]$expected -le [version]'0.4.0') {
-            throw "The published update manifest must be newer than 0.4.0 and match the expected version ($expected)."
+          if ([string]$published.version -ne $expected -or [version]$expected -le [version]'0.4.1') {
+            throw "Published manifest does not offer a newer version than v0.4.1"
           }
-          # Simulate the existing v0.4 tray app downloading while Blitz is open.
           & .\Update-Blitz-Ad-Shield.ps1 -Mode Stage -InstallDir $install
           $stagedVersion = (Get-Content -Raw (Join-Path $install 'VERSION')).Trim()
-          if ($stagedVersion -ne '0.4.0') { throw 'Stage mode modified the running version.' }
+          if ($stagedVersion -ne '0.4.1') { throw 'Stage mode changed the active version.' }
           $pending = Join-Path $env:LOCALAPPDATA 'BlitzAdShield\Updater\pending.json'
           if (-not (Test-Path -LiteralPath $pending -PathType Leaf)) {
-            throw 'Update was not staged for next launch.'
+            throw 'Update was not staged.'
           }
-          # Simulate fully closing Blitz and launching Shield again.
           & .\Update-Blitz-Ad-Shield.ps1 -Mode Apply -InstallDir $install
           $actual = (Get-Content -Raw (Join-Path $install 'VERSION')).Trim()
-          if ($actual -ne $expected) {
-            throw "Updater did not install $expected. Found: $actual"
-          }
+          if ($actual -ne $expected) { throw "Expected v$expected but installed v$actual" }
+          if (Test-Path -LiteralPath $pending -PathType Leaf) { throw 'Updater left pending metadata after installation.' }
           $trayScript = Get-Content -Raw (Join-Path $install 'Blitz-Ad-Shield-Tray.ps1')
+          if (-not $trayScript.Contains('Start-AutomaticInstallIfIdle')) {
+            throw 'Installed tray script is missing hands-free installation.'
+          }
           if (-not $trayScript.Contains('Version: $displayVersion')) {
-            throw 'Installed tray controller does not show the version label.'
+            throw 'Installed tray script has no version label.'
           }
-          foreach ($file in @('Update-Blitz-Ad-Shield.ps1', 'Start-Blitz-Ad-Shield.ps1', 'Blitz-Ad-Shield-Tray.ps1')) {
-            if (-not (Test-Path -LiteralPath (Join-Path $install $file) -PathType Leaf)) {
-              throw "Missing installed file: $file"
-            }
+
+          # Exercise the actual background handoff without launching Blitz or a GUI.
+          # The temporary tray stub only records the supplied NoAutoStart flag.
+          $stub = @'
+          param([string]$BlitzPath, [switch]$NoAutoStart)
+          $result = "$($NoAutoStart.IsPresent)|$BlitzPath"
+          Set-Content -LiteralPath (Join-Path $PSScriptRoot 'tray-started.txt') -Value $result
+          '@
+          Set-Content -LiteralPath (Join-Path $install 'Blitz-Ad-Shield-Tray.ps1') -Value $stub
+          $fakeOldTray = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile -Command "Start-Sleep -Milliseconds 650"' -PassThru
+          $fakeBlitzPath = Join-Path $install 'fake-blitz.exe'
+          & (Join-Path $install 'Start-Blitz-Ad-Shield.ps1') -WaitForPid $fakeOldTray.Id -NoAutoStart -BlitzPath $fakeBlitzPath
+          $recordPath = Join-Path $install 'tray-started.txt'
+          for ($i = 0; $i -lt 30 -and -not (Test-Path -LiteralPath $recordPath -PathType Leaf); $i++) {
+            Start-Sleep -Milliseconds 300
           }
-          Write-Host "Verified updater installed v$actual in an isolated Windows folder."
+          if (-not (Test-Path -LiteralPath $recordPath -PathType Leaf)) {
+            throw 'Automatic launcher did not restart the tray after the old process exited.'
+          }
+          $record = (Get-Content -LiteralPath $recordPath -Raw).Trim()
+          if ($record -cne "True|$fakeBlitzPath") {
+            throw "Auto-launcher did not preserve NoAutoStart and BlitzPath: $record"
+          }
+          Write-Host "Verified v0.4.1 -> v$actual download, install, and passive tray relaunch."
