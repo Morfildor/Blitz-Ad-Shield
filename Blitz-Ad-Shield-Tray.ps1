@@ -2,7 +2,8 @@
 # Runs the existing Blitz-Ad-Shield.ps1 worker in a hidden child PowerShell process.
 # No administrator privileges, installers, network services, or changes to Blitz files.
 param(
-    [string]$BlitzPath = "$env:LOCALAPPDATA\Programs\Blitz\Blitz.exe"
+    [string]$BlitzPath = "$env:LOCALAPPDATA\Programs\Blitz\Blitz.exe",
+    [switch]$NoAutoStart
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,6 +28,8 @@ $script:updateStateDir = Join-Path $env:LOCALAPPDATA 'BlitzAdShield\Updater'
 $script:nextUpdateCheck = (Get-Date).AddHours(6)
 $script:updateProcess = $null
 $script:notifiedVersion = ''
+$script:automaticInstallScheduled = $false
+$script:autoInstallStamp = Join-Path $script:updateStateDir 'last-auto-install.json'
 
 # Only one controller per logged-in Windows session.
 $createdNew = $false
@@ -198,6 +201,53 @@ function Start-UpdateCheck {
     }
 }
 
+function Start-AutomaticInstallIfIdle {
+    if ($script:shuttingDown -or $script:automaticInstallScheduled) { return }
+    if (Get-Process -Name Blitz -ErrorAction SilentlyContinue) { return }
+    $pendingFile = Join-Path $script:updateStateDir 'pending.json'
+    if (-not (Test-Path -LiteralPath $pendingFile -PathType Leaf)) { return }
+    $launcher = Join-Path $PSScriptRoot 'Start-Blitz-Ad-Shield.ps1'
+    if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { return }
+
+    try {
+        $pending = Get-Content -LiteralPath $pendingFile -Raw | ConvertFrom-Json
+        $localVersion = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim()
+        $pendingVersion = [string]$pending.version
+        if ($pendingVersion -notmatch '^\d+\.\d+\.\d+$') { return }
+        if ([version]$pendingVersion -le [version]$localVersion) { return }
+
+        # Never loop indefinitely if a broken update repeatedly fails to install.
+        if (Test-Path -LiteralPath $script:autoInstallStamp -PathType Leaf) {
+            try {
+                $stamp = Get-Content -LiteralPath $script:autoInstallStamp -Raw | ConvertFrom-Json
+                $lastAttempt = [DateTime]::Parse([string]$stamp.timestamp).ToUniversalTime()
+                if ([string]$stamp.version -eq $pendingVersion -and ((Get-Date).ToUniversalTime() - $lastAttempt).TotalHours -lt 6) {
+                    return
+                }
+            } catch { }
+        }
+        [void][IO.Directory]::CreateDirectory($script:updateStateDir)
+        @{ version = $pendingVersion; timestamp = (Get-Date).ToUniversalTime().ToString('o') } |
+            ConvertTo-Json | Set-Content -LiteralPath $script:autoInstallStamp -Encoding UTF8
+
+        $shell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $args = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -WaitForPid {1} -NoAutoStart -BlitzPath "{2}"' -f $launcher, $PID, $BlitzPath
+        $logOut = Join-Path $script:logDir 'automatic-install.log'
+        $logError = Join-Path $script:logDir 'automatic-install-errors.log'
+        $script:automaticInstallScheduled = $true
+        $child = Start-Process -FilePath $shell -ArgumentList $args -WindowStyle Hidden -PassThru -RedirectStandardOutput $logOut -RedirectStandardError $logError
+        if ($null -eq $child) { throw 'Failed to launch automatic installation helper.' }
+        $child.Dispose()
+        Set-TrayStatus "Installing v$pendingVersion automatically..."
+        $script:shuttingDown = $true
+        $script:context.ExitThread()
+    }
+    catch {
+        $script:automaticInstallScheduled = $false
+        Write-Warning "Automatic update handoff failed: $($_.Exception.Message)"
+    }
+}
+
 function Poll-Updates {
     if ($null -ne $script:updateProcess) {
         try {
@@ -216,12 +266,13 @@ function Poll-Updates {
                 $script:updateInfoItem.Text = "Update v$($pending.version) ready for next launch"
                 if ($script:notifiedVersion -ne [string]$pending.version) {
                     $script:notifiedVersion = [string]$pending.version
-                    Show-ShieldNotice "Update v$($pending.version) downloaded. Fully close Blitz, then launch Shield again to install it."
+                    Show-ShieldNotice "Update v$($pending.version) downloaded. It will install automatically after Blitz closes."
                 }
             }
         } catch { }
     }
     if ((Get-Date) -ge $script:nextUpdateCheck) { Start-UpdateCheck }
+    if ($null -eq $script:updateProcess -and -not $script:automaticInstallScheduled) { Start-AutomaticInstallIfIdle }
 }
 
 $script:startItem.Add_Click({ Start-Shield })
@@ -286,7 +337,11 @@ $script:timer.Add_Tick({
 
 try {
     $script:timer.Start()
-    Start-Shield
+    if ($NoAutoStart) {
+        Set-TrayStatus 'Ready to launch Blitz'
+    } else {
+        Start-Shield
+    }
     [System.Windows.Forms.Application]::Run($script:context)
 }
 finally {
