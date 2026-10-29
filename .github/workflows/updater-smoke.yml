@@ -18,7 +18,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Stage v0.5, install, and verify automatic tray relaunch
+      - name: Verify published update, tray handoff, and optional Blitz restart
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
