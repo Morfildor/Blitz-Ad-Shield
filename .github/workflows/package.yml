@@ -17,7 +17,26 @@ permissions:
   contents: write
 
 jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Windows PowerShell 5.1 syntax
+        shell: powershell
+        run: |
+          $scripts = @('Blitz-Ad-Shield.ps1', 'Blitz-Ad-Shield-Tray.ps1')
+          foreach ($file in $scripts) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $env:GITHUB_WORKSPACE $file), [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count -gt 0) {
+              foreach ($parseError in $parseErrors) { Write-Host ($file + ': ' + $parseError.Message) }
+              throw ('PowerShell parse errors in ' + $file)
+            }
+            Write-Host ('PowerShell parsed: ' + $file)
+          }
   package:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +58,7 @@ jobs:
               'README.md',
               'LICENSE'
           ]
-          destination = Path('dist/Blitz-Ad-Shield-Tray-v0.2.zip')
+          destination = Path('dist/Blitz-Ad-Shield-Tray-v0.3.zip')
           destination.parent.mkdir(parents=True, exist_ok=True)
           with ZipFile(destination, 'w', ZIP_DEFLATED, compresslevel=9) as archive:
               for name in files:
@@ -54,7 +73,7 @@ jobs:
         run: |
           git config user.name "Morfildor"
           git config user.email "23294363+Morfildor@users.noreply.github.com"
-          git add -f dist/Blitz-Ad-Shield-Tray-v0.2.zip
+          git add -f dist/Blitz-Ad-Shield-Tray-v0.3.zip
           if ! git diff --cached --quiet; then
             git commit -m "build: package portable Windows tray app"
             git push origin HEAD:main
