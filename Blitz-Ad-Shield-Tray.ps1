@@ -59,6 +59,8 @@ $script:logsItem = [System.Windows.Forms.ToolStripMenuItem]::new('Open logs fold
 $script:checkUpdatesItem = [System.Windows.Forms.ToolStripMenuItem]::new('Check for updates')
 $script:updateInfoItem = [System.Windows.Forms.ToolStripMenuItem]::new('Updates: automatic')
 $script:updateInfoItem.Enabled = $false
+$script:lastCheckedItem = [System.Windows.Forms.ToolStripMenuItem]::new('Last check: not yet')
+$script:lastCheckedItem.Enabled = $false
 $script:exitItem = [System.Windows.Forms.ToolStripMenuItem]::new('Exit Shield')
 $script:timer = New-Object System.Windows.Forms.Timer
 $script:timer.Interval = 1300
@@ -79,6 +81,7 @@ if (Test-Path -LiteralPath $script:iconFile -PathType Leaf) {
 [void]$script:menu.Items.Add($script:logsItem)
 [void]$script:menu.Items.Add($script:checkUpdatesItem)
 [void]$script:menu.Items.Add($script:updateInfoItem)
+[void]$script:menu.Items.Add($script:lastCheckedItem)
 [void]$script:menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 [void]$script:menu.Items.Add($script:exitItem)
 $script:tray.ContextMenuStrip = $script:menu
@@ -249,30 +252,71 @@ function Start-AutomaticInstallIfIdle {
 }
 
 function Poll-Updates {
+    $checking = $false
     if ($null -ne $script:updateProcess) {
         try {
-            if (-not $script:updateProcess.HasExited) { return }
-            $script:updateProcess.Dispose()
-        } catch { }
-        $script:updateProcess = $null
-        $script:updateInfoItem.Text = 'Updates: automatic'
-    }
-    $pendingFile = Join-Path $script:updateStateDir 'pending.json'
-    if (Test-Path -LiteralPath $pendingFile -PathType Leaf) {
-        try {
-            $pending = Get-Content -LiteralPath $pendingFile -Raw | ConvertFrom-Json
-            $currentVersion = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim()
-            if ([string]$pending.version -match '^\d+\.\d+\.\d+$' -and [version]$pending.version -gt [version]$currentVersion) {
-                $script:updateInfoItem.Text = "Update v$($pending.version) ready for next launch"
-                if ($script:notifiedVersion -ne [string]$pending.version) {
-                    $script:notifiedVersion = [string]$pending.version
-                    Show-ShieldNotice "Update v$($pending.version) downloaded. It will install automatically after Blitz closes."
-                }
+            if (-not $script:updateProcess.HasExited) {
+                $checking = $true
+            } else {
+                $script:updateProcess.Dispose()
+                $script:updateProcess = $null
             }
-        } catch { }
+        }
+        catch {
+            $script:updateProcess = $null
+        }
+    }
+
+    if ($checking) {
+        $script:updateInfoItem.Text = 'Updates: checking GitHub...'
+    } else {
+        # The updater writes this file only after completing a network check.
+        # Do not assume "up to date" merely because the helper process exited.
+        $state = $null
+        $statusFile = Join-Path $script:updateStateDir 'status.json'
+        if (Test-Path -LiteralPath $statusFile -PathType Leaf) {
+            try {
+                $state = Get-Content -LiteralPath $statusFile -Raw -ErrorAction Stop | ConvertFrom-Json
+                $checked = [DateTimeOffset]::Parse([string]$state.checkedAt).ToLocalTime()
+                $script:lastCheckedItem.Text = 'Last check: ' + $checked.ToString('dd MMM HH:mm')
+            } catch {
+                $state = $null
+                $script:lastCheckedItem.Text = 'Last check: unavailable'
+            }
+        }
+        $updateText = 'Updates: not checked yet'
+        if ($null -ne $state) {
+            switch ([string]$state.status) {
+                'up-to-date' { $updateText = 'Updates: up to date' }
+                'installed' { $updateText = 'Updates: installed' }
+                'ready' { $updateText = 'Updates: ready to install' }
+                'error' { $updateText = 'Updates: check failed (see logs)' }
+                default { $updateText = 'Updates: status unknown' }
+            }
+        }
+
+        # Pending update takes priority over a failed or stale network check.
+        $pendingFile = Join-Path $script:updateStateDir 'pending.json'
+        if (Test-Path -LiteralPath $pendingFile -PathType Leaf) {
+            try {
+                $pending = Get-Content -LiteralPath $pendingFile -Raw -ErrorAction Stop | ConvertFrom-Json
+                $currentVersion = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim()
+                $pendingVersion = [string]$pending.version
+                if ($pendingVersion -match '^\d+\.\d+\.\d+$' -and [version]$pendingVersion -gt [version]$currentVersion) {
+                    $updateText = "Updates: v$pendingVersion downloaded"
+                    if ($script:notifiedVersion -ne $pendingVersion) {
+                        $script:notifiedVersion = $pendingVersion
+                        Show-ShieldNotice "Update v$pendingVersion downloaded. It will install automatically after Blitz closes."
+                    }
+                }
+            } catch { }
+        }
+        $script:updateInfoItem.Text = $updateText
     }
     if ((Get-Date) -ge $script:nextUpdateCheck) { Start-UpdateCheck }
-    if ($null -eq $script:updateProcess -and -not $script:automaticInstallScheduled) { Start-AutomaticInstallIfIdle }
+    if ($null -eq $script:updateProcess -and -not $script:automaticInstallScheduled) {
+        Start-AutomaticInstallIfIdle
+    }
 }
 
 $script:startItem.Add_Click({ Start-Shield })
