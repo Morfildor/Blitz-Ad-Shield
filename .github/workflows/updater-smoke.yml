@@ -25,6 +25,10 @@ jobs:
           New-Item -ItemType Directory -Path $install -Force | Out-Null
           Set-Content -LiteralPath (Join-Path $install 'VERSION') -Value '0.4.0' -NoNewline
           $expected = (Get-Content -Raw VERSION).Trim()
+          $published = Invoke-RestMethod -Uri "https://raw.githubusercontent.com/Morfildor/Blitz-Ad-Shield/main/dist/latest.json?smoke=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" -TimeoutSec 20
+          if ([string]$published.version -ne $expected -or [version]$expected -le [version]'0.4.0') {
+            throw "The published update manifest must be newer than 0.4.0 and match the expected version ($expected)."
+          }
           # Simulate the existing v0.4 tray app downloading while Blitz is open.
           & .\Update-Blitz-Ad-Shield.ps1 -Mode Stage -InstallDir $install
           $stagedVersion = (Get-Content -Raw (Join-Path $install 'VERSION')).Trim()
@@ -38,6 +42,10 @@ jobs:
           $actual = (Get-Content -Raw (Join-Path $install 'VERSION')).Trim()
           if ($actual -ne $expected) {
             throw "Updater did not install $expected. Found: $actual"
+          }
+          $trayScript = Get-Content -Raw (Join-Path $install 'Blitz-Ad-Shield-Tray.ps1')
+          if (-not $trayScript.Contains('Version: $displayVersion')) {
+            throw 'Installed tray controller does not show the version label.'
           }
           foreach ($file in @('Update-Blitz-Ad-Shield.ps1', 'Start-Blitz-Ad-Shield.ps1', 'Blitz-Ad-Shield-Tray.ps1')) {
             if (-not (Test-Path -LiteralPath (Join-Path $install $file) -PathType Leaf)) {
