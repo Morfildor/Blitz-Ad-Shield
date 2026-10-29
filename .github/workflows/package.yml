@@ -1,4 +1,4 @@
-name: Package Windows tray app
+name: Build and publish Windows portable app
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/package.yml'
       - 'Blitz-Ad-Shield*.ps1'
+      - 'Update-Blitz-Ad-Shield.ps1'
+      - 'Start-Blitz-Ad-Shield.ps1'
+      - 'VERSION'
       - 'Blitz-Ad-Shield.ico'
       - 'Launch-Blitz-Ad-Shield.vbs'
       - 'Run-*.cmd'
@@ -21,20 +24,32 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate Windows PowerShell 5.1 syntax
+      - name: Validate Windows PowerShell 5.1 scripts
         shell: powershell
         run: |
-          $scripts = @('Blitz-Ad-Shield.ps1', 'Blitz-Ad-Shield-Tray.ps1')
+          $scripts = @(
+            'Blitz-Ad-Shield.ps1',
+            'Blitz-Ad-Shield-Tray.ps1',
+            'Start-Blitz-Ad-Shield.ps1',
+            'Update-Blitz-Ad-Shield.ps1'
+          )
           foreach ($file in $scripts) {
             $tokens = $null
             $parseErrors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $env:GITHUB_WORKSPACE $file), [ref]$tokens, [ref]$parseErrors)
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Join-Path $env:GITHUB_WORKSPACE $file), [ref]$tokens, [ref]$parseErrors
+            )
             if ($parseErrors.Count -gt 0) {
-              foreach ($parseError in $parseErrors) { Write-Host ($file + ': ' + $parseError.Message) }
-              throw ('PowerShell parse errors in ' + $file)
+              foreach ($errorRecord in $parseErrors) {
+                Write-Host ($file + ': ' + $errorRecord.Message)
+              }
+              throw ('PowerShell parse error in ' + $file)
             }
-            Write-Host ('PowerShell parsed: ' + $file)
+            Write-Host ('Validated: ' + $file)
           }
+          $version = (Get-Content -Raw VERSION).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'VERSION must be a semantic version (x.y.z).' }
+
   package:
     needs: validate
     runs-on: ubuntu-latest
@@ -42,39 +57,67 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: true
-      - name: Package portable Windows application
+      - name: Create portable ZIP and update manifest
         shell: bash
         run: |
           python3 - <<'PY'
+          import hashlib
+          import json
+          import re
           from pathlib import Path
           from zipfile import ZipFile, ZIP_DEFLATED
+
+          version = Path("VERSION").read_text(encoding="utf-8").strip()
+          if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+              raise ValueError("Invalid VERSION")
           files = [
-              'Blitz-Ad-Shield.ps1',
-              'Blitz-Ad-Shield-Tray.ps1',
-              'Blitz-Ad-Shield.ico',
-              'Launch-Blitz-Ad-Shield.vbs',
-              'Run-Blitz-Ad-Shield.cmd',
-              'Run-Console-Diagnostics.cmd',
-              'README.md',
-              'LICENSE'
+              "Blitz-Ad-Shield.ps1",
+              "Blitz-Ad-Shield-Tray.ps1",
+              "Blitz-Ad-Shield.ico",
+              "Launch-Blitz-Ad-Shield.vbs",
+              "Run-Blitz-Ad-Shield.cmd",
+              "Run-Console-Diagnostics.cmd",
+              "Start-Blitz-Ad-Shield.ps1",
+              "Update-Blitz-Ad-Shield.ps1",
+              "VERSION",
+              "README.md",
+              "LICENSE",
           ]
-          destination = Path('dist/Blitz-Ad-Shield-Tray-v0.3.zip')
+          destination = Path(f"dist/Blitz-Ad-Shield-Tray-v{version}.zip")
           destination.parent.mkdir(parents=True, exist_ok=True)
-          with ZipFile(destination, 'w', ZIP_DEFLATED, compresslevel=9) as archive:
+          with ZipFile(destination, "w", ZIP_DEFLATED, compresslevel=9) as archive:
               for name in files:
-                  path = Path(name)
-                  if not path.is_file():
+                  if not Path(name).is_file():
                       raise FileNotFoundError(name)
-                  archive.write(path, arcname='Blitz-Ad-Shield/' + name)
-          print('Created', destination, destination.stat().st_size, 'bytes')
+                  archive.write(name, arcname="Blitz-Ad-Shield/" + name)
+
+          with ZipFile(destination) as archive:
+              expected = {"Blitz-Ad-Shield/" + name for name in files}
+              if set(archive.namelist()) != expected:
+                  raise ValueError("Missing or extra files in portable ZIP")
+              assert archive.read("Blitz-Ad-Shield/VERSION").decode().strip() == version
+
+          payload = destination.read_bytes()
+          manifest = {
+              "schema": 1,
+              "version": version,
+              "url": f"https://raw.githubusercontent.com/Morfildor/Blitz-Ad-Shield/main/dist/{destination.name}",
+              "sha256": hashlib.sha256(payload).hexdigest(),
+              "size": len(payload),
+          }
+          Path("dist/latest.json").write_text(
+              json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+          )
+          print(f"Prepared version {version}; SHA-256 {manifest['sha256']}")
           PY
-      - name: Commit downloadable application ZIP
+      - name: Publish ZIP and manifest together
         shell: bash
         run: |
+          version="$(tr -d '\r\n' < VERSION)"
           git config user.name "Morfildor"
           git config user.email "23294363+Morfildor@users.noreply.github.com"
-          git add -f dist/Blitz-Ad-Shield-Tray-v0.3.zip
+          git add -f "dist/Blitz-Ad-Shield-Tray-v$version.zip" dist/latest.json
           if ! git diff --cached --quiet; then
-            git commit -m "build: package portable Windows tray app"
+            git commit -m "build: publish Blitz Ad Shield $version and update manifest"
             git push origin HEAD:main
           fi
