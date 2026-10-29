@@ -166,7 +166,8 @@ try {
     # Launch Blitz just once. Reconnecting the blocker must never restart or terminate the app.
     $blitz = Start-Process -FilePath $BlitzPath -ArgumentList @(
         '--remote-debugging-address=127.0.0.1',
-        "--remote-debugging-port=$Port"
+        "--remote-debugging-port=$Port",
+        "--remote-allow-origins=http://127.0.0.1:$Port"
     ) -PassThru
 
     $startupDeadline = (Get-Date).AddSeconds(35)
@@ -198,6 +199,9 @@ try {
             $script:Sequence = 0
             $script:PagesAttached = 0
             $script:Socket = [Net.WebSockets.ClientWebSocket]::new()
+            # Recent Chromium builds may reject a CDP WebSocket with no Origin.
+            # Match the exact localhost-only origin enabled by our launch flag.
+            $script:Socket.Options.SetRequestHeader('Origin', "http://127.0.0.1:$Port")
             $script:ConnectionPhase = 'opening the Chromium WebSocket'
             $script:Socket.ConnectAsync($webSocketUri, $script:Cancel).GetAwaiter().GetResult() | Out-Null
             $script:ConnectionPhase = 'enabling automatic target attachment'
