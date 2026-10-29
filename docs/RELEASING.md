@@ -12,7 +12,7 @@ Ad Shield v0.4.0 and later use the repository's `dist/latest.json` manifest for 
 
 The downloader only installs when the manifest version is newer than the installed `VERSION`. **Changing a script without increasing `VERSION` will not update existing installations.** Make sure to increment the version for every shipped application change.
 
-Users receive updates automatically when they launch Shield and Blitz is closed. If Blitz is running, the update is downloaded but not installed during that session. With v0.5 or later, Shield installs it on its own after Blitz exits normally, then restarts the tray controller without relaunching the game. Shield also checks every six hours while running. Previously installed v0.4 or v0.4.1 builds require one ordinary restart to activate the v0.5 hands-free behavior.
+Users receive updates automatically when they launch Shield and Blitz is closed. If Blitz is running, the update is downloaded but not installed during that session. With v0.5 or later, Shield installs it on its own after Blitz exits normally. With v0.5.2 or later, the new tray also restarts Blitz after a successful update, unless the user has unchecked **Restart Blitz after updates** in the tray menu. Shield also checks every six hours while running. Previously installed v0.4 or v0.4.1 builds require one ordinary restart to activate the v0.5 hands-free behavior.
 
 ## Security and recovery
 
