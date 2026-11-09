@@ -2,6 +2,23 @@
 
 All notable changes to Blitz Ad Shield are documented here.
 
+## [0.6.0] - 2026-11-09
+
+### Changed
+- Pages and frames are now configured before they load (`waitForDebuggerOnStart`), so early ad requests and layout flashes no longer slip through. Every paused target is always resumed, even if setup fails.
+- Frames nested inside other frames are now covered.
+- Much lower CPU use while Blitz is open: network events are classified from their first characters and only the few that matter are parsed. Blocked requests are counted without parsing.
+- Cosmetic script observes only the `<html>` element's children instead of the whole document tree.
+- Tray polls update state every 15 seconds and re-reads the worker log only when it has grown, instead of every 1.3 seconds.
+- Worker banner reads the installed `VERSION`.
+
+### Added
+- `-LegacyAttach` switch on the worker as a kill switch for the new early-attach behavior.
+- Offline test suite (`tests/Test-Worker.ps1`), run by CI before packaging.
+
+### Notes
+- The package file list is unchanged on purpose: older updaters reject ZIPs that contain unexpected files.
+
 ## [0.5.2] - 2026-10-29
 
 ### Added

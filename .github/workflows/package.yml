@@ -12,6 +12,7 @@ on:
       - 'Blitz-Ad-Shield.ico'
       - 'Launch-Blitz-Ad-Shield.vbs'
       - 'Run-*.cmd'
+      - 'tests/**'
       - 'README.md'
       - 'LICENSE'
   workflow_dispatch:
@@ -53,6 +54,11 @@ jobs:
           }
           $version = (Get-Content -Raw VERSION).Trim()
           if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'VERSION must be a semantic version (x.y.z).' }
+      - name: Run worker tests
+        shell: powershell
+        run: |
+          & powershell -NoProfile -ExecutionPolicy Bypass -File tests\Test-Worker.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Worker tests failed.' }
 
   package:
     needs: validate

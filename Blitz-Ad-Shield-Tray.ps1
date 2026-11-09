@@ -26,6 +26,8 @@ $script:shuttingDown = $false
 $script:updateScript = Join-Path $PSScriptRoot 'Update-Blitz-Ad-Shield.ps1'
 $script:updateStateDir = Join-Path $env:LOCALAPPDATA 'BlitzAdShield\Updater'
 $script:nextUpdateCheck = (Get-Date).AddHours(6)
+$script:nextStatePoll = [DateTime]::MinValue
+$script:lastLogLength = -1L
 $script:updateProcess = $null
 $script:notifiedVersion = ''
 $script:automaticInstallScheduled = $false
@@ -166,6 +168,7 @@ function Start-Shield {
     $script:stdoutPath = Join-Path $script:logDir "shield-$stamp.log"
     $script:stderrPath = Join-Path $script:logDir "shield-$stamp-errors.log"
     $script:startedAt = Get-Date
+    $script:lastLogLength = -1L
     $script:connected = $false
     $script:stoppedByUser = $false
     Set-TrayStatus 'Starting Blitz...'
@@ -410,10 +413,21 @@ $script:exitItem.Add_Click({
 })
 
 $script:timer.Add_Tick({
-    Poll-Updates
+    # Update state lives in small JSON files and Blitz detection spawns a lookup,
+    # so poll them every 15 seconds. Follow a running update check on every tick.
+    if ($null -ne $script:updateProcess -or (Get-Date) -ge $script:nextStatePoll) {
+        Poll-Updates
+        $script:nextStatePoll = (Get-Date).AddSeconds(15)
+    }
     if ($null -eq $script:worker) { return }
     if (Worker-IsRunning) {
-        if ($script:stdoutPath -and (Test-Path -LiteralPath $script:stdoutPath)) {
+        # Re-read the log only when the worker has written something new.
+        $logLength = -1L
+        if ($script:stdoutPath) {
+            try { $logLength = ([IO.FileInfo]::new($script:stdoutPath)).Length } catch { }
+        }
+        if ($logLength -ge 0 -and $logLength -ne $script:lastLogLength) {
+            $script:lastLogLength = $logLength
             try {
                 $tail = @(Get-Content -LiteralPath $script:stdoutPath -Tail 12 -ErrorAction Stop)
                 # Use the latest connection event. Older messages may still be in the tail.

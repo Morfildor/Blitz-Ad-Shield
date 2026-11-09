@@ -1,18 +1,23 @@
-﻿# Blitz Ad Shield v0.4 — local, reversible, no installed-file modifications.
+﻿# Blitz Ad Shield worker - local, reversible, no installed-file modifications.
 # Windows PowerShell 5.1+; no admin rights or dependencies required.
 # This console-based worker also runs hidden under the tray controller.
+# Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less files as ANSI.
 param(
     [string]$BlitzPath = "$env:LOCALAPPDATA\Programs\Blitz\Blitz.exe",
     [int]$Port = 0,
     [switch]$NoCosmetic,
     [switch]$DebugLog,
-    [switch]$InspectHosts
+    [switch]$InspectHosts,
+    # Kill switch: attach to pages without pausing them first (pre-0.6 behaviour).
+    [switch]$LegacyAttach
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-# Narrow ad network patterns, not Blitz.gg or Riot service endpoints.
+# ---------------------------------------------------------------------------
+# Rules. Narrow ad-network patterns only, never Blitz.gg or Riot endpoints.
+# ---------------------------------------------------------------------------
 $BlockedUrlPatterns = @(
     '*://aditude.io/*',
     '*://*.aditude.io/*',
@@ -33,14 +38,17 @@ $BlockedUrlPatterns = @(
     '*://*.adnxs.com/*'
 )
 
-# These are narrowly targeted ad-slot selectors seen in Blitz community projects.
-# This script does not alter Blitz's app.asar, inject DLLs, or change game files.
+# Narrowly targeted ad-slot selectors. Nothing here touches app.asar, injects
+# DLLs, or changes game files. The style tag is mounted on <html> and only that
+# element's children are observed, so page re-renders cost nothing.
 $CosmeticScript = @'
 (() => {
   if (window.__blitzAdShieldApplied) return;
   window.__blitzAdShieldApplied = true;
-  const css = `
-    [class*="🤑"],
+  const style = document.createElement('style');
+  style.id = 'blitz-ad-shield-css';
+  style.textContent = `
+    [class*="\u{1F911}"],
     .ads-rail-marker,
     #display-desktop-anchor,
     .leaderboard-promo,
@@ -54,19 +62,21 @@ $CosmeticScript = @'
       --rail-gap: 0px !important;
     }
   `;
-  const style = document.createElement('style');
-  style.id = 'blitz-ad-shield-css';
-  style.textContent = css;
-  const apply = () => {
-    if (document.documentElement && !style.isConnected) {
-      document.documentElement.appendChild(style);
-    }
-  };
-  new MutationObserver(apply).observe(document, {childList: true, subtree: true});
-  apply();
+  const watcher = new MutationObserver(() => mount());
+  function mount() {
+    const root = document.documentElement;
+    if (!root) return;
+    if (!style.isConnected) root.appendChild(style);
+    watcher.observe(root, { childList: true });
+  }
+  watcher.observe(document, { childList: true });
+  mount();
 })();
 '@
 
+# ---------------------------------------------------------------------------
+# State
+# ---------------------------------------------------------------------------
 $script:Socket = $null
 $script:Sequence = 0
 $script:Buffer = [byte[]]::new(65536)
@@ -75,7 +85,12 @@ $script:CommandNames = @{}
 $script:BlocksObserved = 0
 $script:PagesAttached = 0
 $script:HostsSeen = @{}
+$script:ConnectionPhase = 'starting'
+$script:Utf8 = [Text.UTF8Encoding]::new($false)
 
+# ---------------------------------------------------------------------------
+# CDP transport
+# ---------------------------------------------------------------------------
 function Send-CdpCommand {
     param(
         [Parameter(Mandatory = $true)][string]$Method,
@@ -86,7 +101,9 @@ function Send-CdpCommand {
     $id = $script:Sequence
     $payload = [ordered]@{ id = $id; method = $Method; params = $Params }
     if ($SessionId) { $payload['sessionId'] = $SessionId }
-    $bytes = [Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 8 -Compress))
+    $bytes = $script:Utf8.GetBytes(($payload | ConvertTo-Json -Depth 8 -Compress))
+    # Bounded: responses prune entries, and a clear guards against odd servers.
+    if ($script:CommandNames.Count -gt 2048) { $script:CommandNames.Clear() }
     $script:CommandNames[[string]$id] = $Method
     $script:ConnectionPhase = "sending $Method"
     $script:Socket.SendAsync(
@@ -99,23 +116,133 @@ function Send-CdpCommand {
 
 function Receive-CdpMessage {
     $script:ConnectionPhase = 'receiving Chromium messages'
+    $result = $script:Socket.ReceiveAsync(
+        [ArraySegment[byte]]::new($script:Buffer),
+        $script:Cancel
+    ).GetAwaiter().GetResult()
+    if ($result.MessageType -eq [Net.WebSockets.WebSocketMessageType]::Close) { return $null }
+
+    # Most messages fit in one frame: decode straight from the shared buffer.
+    if ($result.EndOfMessage) {
+        return $script:Utf8.GetString($script:Buffer, 0, $result.Count)
+    }
+
     $stream = [IO.MemoryStream]::new()
     try {
+        $stream.Write($script:Buffer, 0, $result.Count)
         do {
             $result = $script:Socket.ReceiveAsync(
                 [ArraySegment[byte]]::new($script:Buffer),
                 $script:Cancel
             ).GetAwaiter().GetResult()
-            if ($result.MessageType -eq [Net.WebSockets.WebSocketMessageType]::Close) {
-                return $null
-            }
+            if ($result.MessageType -eq [Net.WebSockets.WebSocketMessageType]::Close) { return $null }
             $stream.Write($script:Buffer, 0, $result.Count)
         } while (-not $result.EndOfMessage)
-        return [Text.Encoding]::UTF8.GetString($stream.ToArray())
+        return $script:Utf8.GetString($stream.GetBuffer(), 0, [int]$stream.Length)
     }
     finally { $stream.Dispose() }
 }
 
+# ---------------------------------------------------------------------------
+# Message handling
+#
+# Network.enable makes Chromium emit an event for every request and response.
+# Parsing each one with ConvertFrom-Json is the dominant cost in PowerShell, so
+# messages are classified from their first characters and only the few we act
+# on are parsed. Blocked requests are counted from the raw text, with no parse.
+# ---------------------------------------------------------------------------
+function Test-MessageHead {
+    param([string]$Raw, [string]$Needle)
+    $window = [Math]::Min(160, $Raw.Length)
+    return $Raw.IndexOf($Needle, 0, $window, [StringComparison]::Ordinal) -ge 0
+}
+
+function Initialize-CdpTarget {
+    param($Message)
+    $params = $Message.params
+    $session = [string]$params.sessionId
+    $type = [string]$params.targetInfo.type
+    $waiting = $params.PSObject.Properties.Name -contains 'waitingForDebugger' -and [bool]$params.waitingForDebugger
+
+    try {
+        if ($type -in @('page', 'iframe')) {
+            $script:PagesAttached++
+            if ($DebugLog) { Write-Host "Attached to ${type}: $($params.targetInfo.url)" }
+
+            # Cover frames nested inside this one, then apply rules before it can load.
+            Send-CdpCommand -Method 'Target.setAutoAttach' -SessionId $session -Params @{
+                autoAttach = $true
+                waitForDebuggerOnStart = (-not $LegacyAttach)
+                flatten = $true
+            }
+            Send-CdpCommand -Method 'Network.enable' -SessionId $session
+            Send-CdpCommand -Method 'Network.setBlockedURLs' -Params @{ urls = $BlockedUrlPatterns } -SessionId $session
+            if (-not $NoCosmetic -and $type -eq 'page') {
+                Send-CdpCommand -Method 'Page.enable' -SessionId $session
+                Send-CdpCommand -Method 'Page.addScriptToEvaluateOnNewDocument' -Params @{ source = $CosmeticScript } -SessionId $session
+                # A page that was already loaded will not run the script above again.
+                if (-not $waiting) {
+                    Send-CdpCommand -Method 'Runtime.evaluate' -Params @{ expression = $CosmeticScript } -SessionId $session
+                }
+            }
+            if ($script:PagesAttached -eq 1) {
+                Write-Host 'Blitz page attached. Ads should now be blocked; open a build page to check.' -ForegroundColor Green
+            }
+        }
+    }
+    finally {
+        # Every paused target must be released, including types we do not touch
+        # (workers and so on), or that part of Blitz would hang until we disconnect.
+        if ($waiting) {
+            Send-CdpCommand -Method 'Runtime.runIfWaitingForDebugger' -SessionId $session
+        }
+    }
+}
+
+function Invoke-CdpMessage {
+    param([Parameter(Mandatory = $true)][string]$Raw)
+
+    # Command responses start with the id. Parse only the failures.
+    if ($Raw.StartsWith('{"id":', [StringComparison]::Ordinal)) {
+        $end = $Raw.IndexOfAny([char[]]@(',', '}'), 6)
+        $key = $null
+        if ($end -gt 6) { $key = $Raw.Substring(6, $end - 6) }
+        if ($Raw.IndexOf('"error"', [StringComparison]::Ordinal) -ge 0) {
+            $message = $Raw | ConvertFrom-Json
+            if ($message.PSObject.Properties.Name -contains 'error') {
+                $methodName = 'CDP command'
+                if ($key -and $script:CommandNames.ContainsKey($key)) { $methodName = $script:CommandNames[$key] }
+                Write-Warning "$methodName failed: $($message.error.message)"
+            }
+        }
+        if ($key) { [void]$script:CommandNames.Remove($key) }
+        return
+    }
+
+    if (Test-MessageHead $Raw '"Target.attachedToTarget"') {
+        Initialize-CdpTarget -Message ($Raw | ConvertFrom-Json)
+    }
+    elseif (Test-MessageHead $Raw '"Network.loadingFailed"') {
+        if ($Raw.IndexOf('ERR_BLOCKED_BY_CLIENT', [StringComparison]::Ordinal) -ge 0) {
+            $script:BlocksObserved++
+            if ($DebugLog) { Write-Host "Blocked request #$($script:BlocksObserved)" }
+        }
+    }
+    elseif ($InspectHosts -and (Test-MessageHead $Raw '"Network.requestWillBeSent"')) {
+        try {
+            $message = $Raw | ConvertFrom-Json
+            $hostName = ([uri]$message.params.request.url).Host.ToLowerInvariant()
+            if ($hostName -and -not $script:HostsSeen.ContainsKey($hostName)) {
+                $script:HostsSeen[$hostName] = $true
+                Write-Host "Network host: $hostName"
+            }
+        } catch { }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 function Find-FreeLoopbackPort {
     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
     try {
@@ -125,8 +252,53 @@ function Find-FreeLoopbackPort {
     finally { $listener.Stop() }
 }
 
+function Format-ConnectionError {
+    param([System.Exception]$Exception)
+    $details = New-Object 'System.Collections.Generic.List[string]'
+    $cursor = $Exception
+    for ($depth = 0; $cursor -and $depth -lt 6; $depth++) {
+        if ($cursor.Message) { [void]$details.Add($cursor.Message) }
+        if ($cursor -is [Net.WebSockets.WebSocketException]) {
+            [void]$details.Add("WebSocket code: $($cursor.WebSocketErrorCode)")
+        }
+        $cursor = $cursor.InnerException
+    }
+    return ($details | Select-Object -Unique) -join ' | '
+}
+
+function Get-ShieldVersion {
+    $path = Join-Path $PSScriptRoot 'VERSION'
+    try { return (Get-Content -LiteralPath $path -Raw -ErrorAction Stop).Trim() }
+    catch { return 'dev' }
+}
+
+function Connect-Blitz {
+    param([uri]$WebSocketUri, [int]$Port)
+    $script:CommandNames.Clear()
+    $script:Sequence = 0
+    $script:PagesAttached = 0
+    $script:Socket = [Net.WebSockets.ClientWebSocket]::new()
+    # Recent Chromium builds may reject a CDP WebSocket with no Origin.
+    # Match the exact localhost-only origin enabled by our launch flag.
+    $script:Socket.Options.SetRequestHeader('Origin', "http://127.0.0.1:$Port")
+    $script:ConnectionPhase = 'opening the Chromium WebSocket'
+    $script:Socket.ConnectAsync($WebSocketUri, $script:Cancel).GetAwaiter().GetResult() | Out-Null
+    $script:ConnectionPhase = 'enabling automatic target attachment'
+    Send-CdpCommand -Method 'Target.setAutoAttach' -Params @{
+        autoAttach = $true
+        waitForDebuggerOnStart = (-not $LegacyAttach)
+        flatten = $true
+    }
+}
+
+# Dot-sourcing this file (for tests) loads the functions without launching Blitz.
+if ($MyInvocation.InvocationName -eq '.') { return }
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 Write-Host ''
-Write-Host 'Blitz Ad Shield v0.4' -ForegroundColor Cyan
+Write-Host "Blitz Ad Shield v$(Get-ShieldVersion)" -ForegroundColor Cyan
 Write-Host 'Local Chromium request blocker + optional ad-slot hiding.'
 Write-Host 'In console mode, leave this window running; press Ctrl+C to stop blocking.'
 Write-Host ''
@@ -145,22 +317,7 @@ if ($Port -lt 1024 -or $Port -gt 65535) { throw 'Port must be 1024-65535, or 0 f
 
 $debugUrl = "http://127.0.0.1:$Port/json/version"
 Write-Host "Launching Blitz with localhost-only debug port $Port ..."
-
 $script:ConnectionPhase = 'launching Blitz'
-
-function Format-ConnectionError {
-    param([System.Exception]$Exception)
-    $details = New-Object 'System.Collections.Generic.List[string]'
-    $cursor = $Exception
-    for ($depth = 0; $cursor -and $depth -lt 6; $depth++) {
-        if ($cursor.Message) { [void]$details.Add($cursor.Message) }
-        if ($cursor -is [Net.WebSockets.WebSocketException]) {
-            [void]$details.Add("WebSocket code: $($cursor.WebSocketErrorCode)")
-        }
-        $cursor = $cursor.InnerException
-    }
-    return ($details | Select-Object -Unique) -join ' | '
-}
 
 try {
     # Launch Blitz just once. Reconnecting the blocker must never restart or terminate the app.
@@ -195,21 +352,7 @@ try {
                 throw 'The debug endpoint is not on the expected localhost port.'
             }
 
-            $script:CommandNames.Clear()
-            $script:Sequence = 0
-            $script:PagesAttached = 0
-            $script:Socket = [Net.WebSockets.ClientWebSocket]::new()
-            # Recent Chromium builds may reject a CDP WebSocket with no Origin.
-            # Match the exact localhost-only origin enabled by our launch flag.
-            $script:Socket.Options.SetRequestHeader('Origin', "http://127.0.0.1:$Port")
-            $script:ConnectionPhase = 'opening the Chromium WebSocket'
-            $script:Socket.ConnectAsync($webSocketUri, $script:Cancel).GetAwaiter().GetResult() | Out-Null
-            $script:ConnectionPhase = 'enabling automatic target attachment'
-            Send-CdpCommand -Method 'Target.setAutoAttach' -Params @{
-                autoAttach = $true
-                waitForDebuggerOnStart = $false
-                flatten = $true
-            }
+            Connect-Blitz -WebSocketUri $webSocketUri -Port $Port
 
             if ($hasConnected) {
                 Write-Host 'Reconnected to Blitz. Blocking known advertising networks...' -ForegroundColor Green
@@ -218,57 +361,12 @@ try {
             }
             $hasConnected = $true
             $lastConnectedAt = Get-Date
-            $script:ConnectionPhase = 'receiving Chromium messages'
-    while ($script:Socket.State -eq [Net.WebSockets.WebSocketState]::Open) {
-        $raw = Receive-CdpMessage
-        if (-not $raw) { break }
-        $message = $raw | ConvertFrom-Json
 
-        if ($message.PSObject.Properties.Name -contains 'error') {
-            $methodName = 'CDP command'
-            $key = [string]$message.id
-            if ($script:CommandNames.ContainsKey($key)) { $methodName = $script:CommandNames[$key] }
-            Write-Warning "$methodName failed: $($message.error.message)"
-            continue
-        }
-        if ($message.PSObject.Properties.Name -contains 'id') {
-            [void]$script:CommandNames.Remove([string]$message.id)
-        }
-        if (-not ($message.PSObject.Properties.Name -contains 'method')) { continue }
-
-        if ($message.method -eq 'Target.attachedToTarget') {
-            $target = $message.params.targetInfo
-            $session = [string]$message.params.sessionId
-            if ($target.type -notin @('page', 'iframe')) { continue }
-            $script:PagesAttached++
-            if ($DebugLog) { Write-Host "Attached to $($target.type): $($target.url)" }
-            Send-CdpCommand -Method 'Network.enable' -SessionId $session
-            Send-CdpCommand -Method 'Network.setBlockedURLs' -Params @{ urls = $BlockedUrlPatterns } -SessionId $session
-            if (-not $NoCosmetic -and $target.type -eq 'page') {
-                Send-CdpCommand -Method 'Page.enable' -SessionId $session
-                Send-CdpCommand -Method 'Page.addScriptToEvaluateOnNewDocument' -Params @{ source = $CosmeticScript } -SessionId $session
-                Send-CdpCommand -Method 'Runtime.evaluate' -Params @{ expression = $CosmeticScript } -SessionId $session
+            while ($script:Socket.State -eq [Net.WebSockets.WebSocketState]::Open) {
+                $raw = Receive-CdpMessage
+                if (-not $raw) { break }
+                Invoke-CdpMessage -Raw $raw
             }
-            if ($script:PagesAttached -eq 1) {
-                Write-Host 'Blitz page attached. Ads should now be blocked; open a build page to check.' -ForegroundColor Green
-            }
-        }
-        elseif ($InspectHosts -and $message.method -eq 'Network.requestWillBeSent') {
-            try {
-                $hostName = ([uri]$message.params.request.url).Host.ToLowerInvariant()
-                if ($hostName -and -not $script:HostsSeen.ContainsKey($hostName)) {
-                    $script:HostsSeen[$hostName] = $true
-                    Write-Host "Network host: $hostName"
-                }
-            } catch { }
-        }
-        elseif ($message.method -eq 'Network.loadingFailed') {
-            if ($message.params.errorText -like '*BLOCKED_BY_CLIENT*') {
-                $script:BlocksObserved++
-                if ($DebugLog) { Write-Host "Blocked request #$($script:BlocksObserved)" }
-            }
-        }
-    }
 
             if (-not (Get-Process -Name Blitz -ErrorAction SilentlyContinue)) {
                 Write-Host 'Blitz is closed. Disconnecting the blocker.'
