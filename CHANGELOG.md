@@ -2,6 +2,11 @@
 
 All notable changes to Blitz Ad Shield are documented here.
 
+## [0.7.1] - 2026-11-09
+
+### Changed
+- New logo with a transparent background: a shield-shaped tray icon (16-256 px) that reads on light and dark taskbars, plus the README and website.
+
 ## [0.7.0] - 2026-11-09
 
 ### Security
@@ -10,7 +15,6 @@ All notable changes to Blitz Ad Shield are documented here.
 
 ### Changed
 - Stopping or exiting Shield while Blitz is open now asks first: Blitz closes its window to the tray and runs unfiltered until restarted through Shield.
-- New logo: tray icon (now with 16-256 px sizes), README and website.
 - A message that fails to process can no longer end the worker.
 - Saving the restart preference now keeps the connection mode setting.
 - Fixed the tray reporting a clean disconnect as 'The blocker stopped': Windows PowerShell returned a blank exit code unless the worker's process handle was cached.
