@@ -1,4 +1,4 @@
-﻿# Blitz Ad Shield worker - local, reversible, no installed-file modifications.
+# Blitz Ad Shield worker - local, reversible, no installed-file modifications.
 # Windows PowerShell 5.1+; no admin rights or dependencies required.
 # This console-based worker also runs hidden under the tray controller.
 # Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less files as ANSI.
@@ -9,7 +9,9 @@ param(
     [switch]$DebugLog,
     [switch]$InspectHosts,
     # Kill switch: attach to pages without pausing them first (pre-0.6 behaviour).
-    [switch]$LegacyAttach
+    [switch]$LegacyAttach,
+    # Use a local TCP debugging port instead of the private pipe (the pre-0.7 behaviour).
+    [switch]$UsePort
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,6 +80,7 @@ $CosmeticScript = @'
 # State
 # ---------------------------------------------------------------------------
 $script:Socket = $null
+$script:Pipe = $null
 $script:Sequence = 0
 $script:Buffer = [byte[]]::new(65536)
 $script:Cancel = [Threading.CancellationToken]::None
@@ -101,11 +104,16 @@ function Send-CdpCommand {
     $id = $script:Sequence
     $payload = [ordered]@{ id = $id; method = $Method; params = $Params }
     if ($SessionId) { $payload['sessionId'] = $SessionId }
-    $bytes = $script:Utf8.GetBytes(($payload | ConvertTo-Json -Depth 8 -Compress))
+    $json = $payload | ConvertTo-Json -Depth 8 -Compress
     # Bounded: responses prune entries, and a clear guards against odd servers.
     if ($script:CommandNames.Count -gt 2048) { $script:CommandNames.Clear() }
     $script:CommandNames[[string]$id] = $Method
     $script:ConnectionPhase = "sending $Method"
+    if ($null -ne $script:Pipe) {
+        $script:Pipe.Send($json)
+        return
+    }
+    $bytes = $script:Utf8.GetBytes($json)
     $script:Socket.SendAsync(
         [ArraySegment[byte]]::new($bytes),
         [Net.WebSockets.WebSocketMessageType]::Text,
@@ -291,35 +299,297 @@ function Connect-Blitz {
     }
 }
 
-# Dot-sourcing this file (for tests) loads the functions without launching Blitz.
-if ($MyInvocation.InvocationName -eq '.') { return }
-
 # ---------------------------------------------------------------------------
-# Main
+# Private pipe transport.
+# Chromium can speak DevTools over a pair of anonymous pipes inherited by the
+# child process, so no TCP port is ever opened. This type launches Blitz with
+# exactly two inheritable handles and frames messages with a trailing NUL byte.
+# Note: when the pipe closes, Electron asks Blitz to quit. Blitz answers by closing
+# its window to the system tray and keeps running unfiltered, so ads return until
+# it is restarted through Shield.
 # ---------------------------------------------------------------------------
-Write-Host ''
-Write-Host "Blitz Ad Shield v$(Get-ShieldVersion)" -ForegroundColor Cyan
-Write-Host 'Local Chromium request blocker + optional ad-slot hiding.'
-Write-Host 'In console mode, leave this window running; press Ctrl+C to stop blocking.'
-Write-Host ''
+$PipeSource = @'
+using System;
+using System.Collections.Concurrent;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using Microsoft.Win32.SafeHandles;
 
-if (-not (Test-Path -LiteralPath $BlitzPath -PathType Leaf)) {
-    throw "Blitz.exe was not found: $BlitzPath`nPass -BlitzPath 'C:\path\to\Blitz.exe' if installed elsewhere."
+public sealed class CdpPipe : IDisposable
+{
+    const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
+    const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+    const int HANDLE_FLAG_INHERIT = 1;
+    static readonly IntPtr PROC_THREAD_ATTRIBUTE_HANDLE_LIST = (IntPtr)0x00020002;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct SECURITY_ATTRIBUTES { public int nLength; public IntPtr lpSecurityDescriptor; public int bInheritHandle; }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct STARTUPINFO
+    {
+        public int cb; public string lpReserved; public string lpDesktop; public string lpTitle;
+        public int dwX; public int dwY; public int dwXSize; public int dwYSize;
+        public int dwXCountChars; public int dwYCountChars; public int dwFillAttribute; public int dwFlags;
+        public short wShowWindow; public short cbReserved2; public IntPtr lpReserved2;
+        public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct STARTUPINFOEX { public STARTUPINFO StartupInfo; public IntPtr lpAttributeList; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct PROCESS_INFORMATION { public IntPtr hProcess; public IntPtr hThread; public int dwProcessId; public int dwThreadId; }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool CreatePipe(out IntPtr hReadPipe, out IntPtr hWritePipe, ref SECURITY_ATTRIBUTES sa, int nSize);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool SetHandleInformation(IntPtr h, int mask, int flags);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, int flags, ref IntPtr size);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr previous, IntPtr returnSize);
+    [DllImport("kernel32.dll")]
+    static extern void DeleteProcThreadAttributeList(IntPtr list);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool CreateProcessW(string app, StringBuilder commandLine, IntPtr procAttrs, IntPtr threadAttrs,
+        bool inheritHandles, uint flags, IntPtr environment, string currentDirectory,
+        ref STARTUPINFOEX startupInfo, out PROCESS_INFORMATION processInfo);
+
+    readonly FileStream toChild;
+    readonly FileStream fromChild;
+    readonly Process child;
+    readonly BlockingCollection<string> inbox = new BlockingCollection<string>();
+    readonly object sendLock = new object();
+    public int ProcessId { get; private set; }
+
+    CdpPipe(FileStream toChild, FileStream fromChild, Process child, int pid)
+    {
+        this.toChild = toChild; this.fromChild = fromChild; this.child = child; ProcessId = pid;
+        Thread reader = new Thread(ReadLoop);
+        reader.IsBackground = true;
+        reader.Start();
+    }
+
+    // argsTemplate may contain {READ} and {WRITE}: the handle values the child must use.
+    // {READ} is where the child reads our commands; {WRITE} is where it writes replies.
+    public static CdpPipe Launch(string exePath, string argsTemplate)
+    {
+        SECURITY_ATTRIBUTES sa = new SECURITY_ATTRIBUTES();
+        sa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
+        sa.bInheritHandle = 1;
+        IntPtr cmdRead, cmdWrite, resRead, resWrite;
+        if (!CreatePipe(out cmdRead, out cmdWrite, ref sa, 0)) throw new Win32Exception(Marshal.GetLastWin32Error());
+        if (!CreatePipe(out resRead, out resWrite, ref sa, 0))
+        {
+            int error = Marshal.GetLastWin32Error();
+            CloseHandle(cmdRead); CloseHandle(cmdWrite);
+            throw new Win32Exception(error);
+        }
+        // Our own ends must never be inherited by the child.
+        SetHandleInformation(cmdWrite, HANDLE_FLAG_INHERIT, 0);
+        SetHandleInformation(resRead, HANDLE_FLAG_INHERIT, 0);
+
+        IntPtr attrList = IntPtr.Zero;
+        GCHandle pinned = default(GCHandle);
+        bool launched = false;
+        try
+        {
+            IntPtr size = IntPtr.Zero;
+            InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+            attrList = Marshal.AllocHGlobal(size);
+            if (!InitializeProcThreadAttributeList(attrList, 1, 0, ref size)) throw new Win32Exception(Marshal.GetLastWin32Error());
+            // Only these two handles are inherited by the child; nothing else leaks.
+            IntPtr[] inherit = new IntPtr[] { cmdRead, resWrite };
+            pinned = GCHandle.Alloc(inherit, GCHandleType.Pinned);
+            if (!UpdateProcThreadAttribute(attrList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                pinned.AddrOfPinnedObject(), (IntPtr)(IntPtr.Size * 2), IntPtr.Zero, IntPtr.Zero))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+
+            STARTUPINFOEX si = new STARTUPINFOEX();
+            si.StartupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
+            si.lpAttributeList = attrList;
+
+            string args = argsTemplate
+                .Replace("{READ}", cmdRead.ToInt64().ToString())
+                .Replace("{WRITE}", resWrite.ToInt64().ToString());
+            StringBuilder commandLine = new StringBuilder("\"" + exePath + "\" " + args);
+            PROCESS_INFORMATION pi;
+            if (!CreateProcessW(null, commandLine, IntPtr.Zero, IntPtr.Zero, true,
+                EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, IntPtr.Zero,
+                Path.GetDirectoryName(exePath), ref si, out pi))
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            launched = true;
+            Process child = null;
+            try { child = Process.GetProcessById(pi.dwProcessId); } catch (Exception) { }
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            // Close the child's ends here, or we would never see the pipe close.
+            CloseHandle(cmdRead);
+            CloseHandle(resWrite);
+            return new CdpPipe(
+                new FileStream(new SafeFileHandle(cmdWrite, true), FileAccess.Write, 4096, false),
+                new FileStream(new SafeFileHandle(resRead, true), FileAccess.Read, 4096, false),
+                child, pi.dwProcessId);
+        }
+        finally
+        {
+            if (pinned.IsAllocated) pinned.Free();
+            if (attrList != IntPtr.Zero) { DeleteProcThreadAttributeList(attrList); Marshal.FreeHGlobal(attrList); }
+            if (!launched) { CloseHandle(cmdRead); CloseHandle(cmdWrite); CloseHandle(resRead); CloseHandle(resWrite); }
+        }
+    }
+
+    void ReadLoop()
+    {
+        byte[] buffer = new byte[16384];
+        MemoryStream pending = new MemoryStream();
+        try
+        {
+            while (true)
+            {
+                int n = fromChild.Read(buffer, 0, buffer.Length);
+                if (n <= 0) break;
+                for (int i = 0; i < n; i++)
+                {
+                    if (buffer[i] == 0)
+                    {
+                        inbox.Add(Encoding.UTF8.GetString(pending.GetBuffer(), 0, (int)pending.Length));
+                        pending.SetLength(0);
+                    }
+                    else pending.WriteByte(buffer[i]);
+                }
+            }
+        }
+        catch (Exception) { }
+        finally { inbox.CompleteAdding(); }
+    }
+
+    public void Send(string json)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(json);
+        lock (sendLock)
+        {
+            toChild.Write(bytes, 0, bytes.Length);
+            toChild.WriteByte(0);
+            toChild.Flush();
+        }
+    }
+
+    // False on timeout, or when the pipe is closed and nothing is left to read.
+    public bool TryReceive(int timeoutMs, out string message)
+    {
+        return inbox.TryTake(out message, timeoutMs);
+    }
+
+    // True once the other side closed the pipe and every queued message was read.
+    public bool Closed { get { return inbox.IsCompleted; } }
+
+    // True when the launched process has exited (or cannot be inspected).
+    public bool WaitForChildExit(int timeoutMs)
+    {
+        try { return child == null || child.WaitForExit(timeoutMs); }
+        catch (Exception) { return true; }
+    }
+
+    public void Dispose()
+    {
+        try { toChild.Dispose(); } catch (Exception) { }
+        try { fromChild.Dispose(); } catch (Exception) { }
+        try { if (child != null) child.Dispose(); } catch (Exception) { }
+    }
+}
+'@
+
+function Initialize-PipeType {
+    if ('CdpPipe' -as [type]) { return }
+    Add-Type -TypeDefinition $PipeSource -Language CSharp
 }
 
-# Do not terminate Blitz, Riot, or any other running process.
-if (Get-Process -Name Blitz -ErrorAction SilentlyContinue) {
-    throw 'Blitz is already running. Fully exit Blitz from the system tray and try again. This tool never kills Blitz automatically.'
+# Runs one Blitz session over the private pipe.
+# Returns $false only if Blitz could not be started this way (the caller may fall
+# back to the TCP port). Returns $true once Blitz was started and the session ended.
+function Start-PipeSession {
+    param([string]$BlitzPath)
+
+    try {
+        Initialize-PipeType
+        $script:CommandNames.Clear()
+        $script:Sequence = 0
+        $script:PagesAttached = 0
+        $script:ConnectionPhase = 'launching Blitz over a private pipe'
+        $script:Pipe = [CdpPipe]::Launch($BlitzPath, '--remote-debugging-pipe --remote-debugging-io-pipes={READ},{WRITE}')
+    }
+    catch {
+        Write-Warning ('Could not start Blitz over a private pipe: {0}' -f (Format-ConnectionError -Exception $_.Exception))
+        $script:Pipe = $null
+        return $false
+    }
+
+    $pipe = $script:Pipe
+    $received = $false
+    $exited = $false
+    Write-Host 'Launched Blitz with a private connection (no network debugging port).'
+    Write-Host 'If Shield stops, Blitz closes its window to the tray and ads return until it is restarted through Shield.'
+    try {
+        Send-CdpCommand -Method 'Target.setAutoAttach' -Params @{
+            autoAttach = $true
+            waitForDebuggerOnStart = (-not $LegacyAttach)
+            flatten = $true
+        }
+        $message = $null
+        while ($true) {
+            if ($pipe.TryReceive(1000, [ref]$message)) {
+                if (-not $received) {
+                    $received = $true
+                    Write-Host 'Connected. Blocking known advertising networks...' -ForegroundColor Green
+                }
+                # A failure here must never end the worker: Blitz would close with it.
+                try { Invoke-CdpMessage -Raw $message }
+                catch { Write-Warning ('Skipped a message that could not be handled: {0}' -f $_.Exception.Message) }
+            }
+            elseif ($pipe.Closed) { break }
+        }
+        $script:ConnectionPhase = 'waiting for Blitz to exit'
+        $exited = $pipe.WaitForChildExit(15000)
+    }
+    finally {
+        $script:Pipe = $null
+        $pipe.Dispose()
+    }
+
+    if (-not $received) {
+        throw 'Blitz closed before it answered. If Blitz was just updated, close it fully and start it through Shield again.'
+    }
+    if ($exited) {
+        # Blitz's helper processes need a moment to finish closing after the main one exits.
+        for ($i = 0; $i -lt 10 -and (Get-Process -Name Blitz -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 500 }
+    }
+    if (Get-Process -Name Blitz -ErrorAction SilentlyContinue) {
+        Write-Host 'Shield is no longer connected, but Blitz is still running (it may have restarted itself). Close Blitz fully and start it through Shield to block ads again.'
+    } else {
+        Write-Host 'Blitz is closed. Disconnecting the blocker.'
+    }
+    return $true
 }
 
-if ($Port -eq 0) { $Port = Find-FreeLoopbackPort }
-if ($Port -lt 1024 -or $Port -gt 65535) { throw 'Port must be 1024-65535, or 0 for an automatic port.' }
+# Runs one Blitz session over a localhost TCP debugging port (legacy mode).
+function Start-PortSession {
+    param([string]$BlitzPath, [int]$Port)
 
-$debugUrl = "http://127.0.0.1:$Port/json/version"
-Write-Host "Launching Blitz with localhost-only debug port $Port ..."
-$script:ConnectionPhase = 'launching Blitz'
+    if ($Port -eq 0) { $Port = Find-FreeLoopbackPort }
+    if ($Port -lt 1024 -or $Port -gt 65535) { throw 'Port must be 1024-65535, or 0 for an automatic port.' }
 
-try {
+    $debugUrl = "http://127.0.0.1:$Port/json/version"
+    Write-Host "Launching Blitz with localhost-only debug port $Port ..."
+    $script:ConnectionPhase = 'launching Blitz'
+
     # Launch Blitz just once. Reconnecting the blocker must never restart or terminate the app.
     $blitz = Start-Process -FilePath $BlitzPath -ArgumentList @(
         '--remote-debugging-address=127.0.0.1',
@@ -398,6 +668,44 @@ try {
         }
         # A short backoff handles temporary restarts without hammering the local endpoint.
         Start-Sleep -Milliseconds ([Math]::Min(2000, 400 * $failures))
+    }
+}
+
+# Dot-sourcing this file (for tests) loads the functions without launching Blitz.
+if ($MyInvocation.InvocationName -eq '.') { return }
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+Write-Host ''
+Write-Host "Blitz Ad Shield v$(Get-ShieldVersion)" -ForegroundColor Cyan
+Write-Host 'Local Chromium request blocker + optional ad-slot hiding.'
+if ($UsePort) {
+    Write-Host 'In console mode, leave this window running; press Ctrl+C to stop blocking.'
+} else {
+    Write-Host 'In console mode, leave this window running; Ctrl+C stops blocking (Blitz then closes to its tray).'
+}
+Write-Host ''
+
+if (-not (Test-Path -LiteralPath $BlitzPath -PathType Leaf)) {
+    throw "Blitz.exe was not found: $BlitzPath`nPass -BlitzPath 'C:\path\to\Blitz.exe' if installed elsewhere."
+}
+
+# Do not terminate Blitz, Riot, or any other running process.
+if (Get-Process -Name Blitz -ErrorAction SilentlyContinue) {
+    throw 'Blitz is already running. Fully exit Blitz from the system tray and try again. This tool never kills Blitz automatically.'
+}
+
+try {
+    $done = $false
+    if (-not $UsePort) {
+        $done = Start-PipeSession -BlitzPath $BlitzPath
+        if (-not $done) {
+            Write-Warning 'Falling back to the local TCP debugging port. Other programs on this PC may be able to reach it while Blitz runs.'
+        }
+    }
+    if (-not $done) {
+        Start-PortSession -BlitzPath $BlitzPath -Port $Port
     }
 }
 catch {

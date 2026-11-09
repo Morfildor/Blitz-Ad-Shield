@@ -6,7 +6,9 @@ Blitz Ad Shield has not undergone an external security audit. Security reports a
 
 ## Security-sensitive behavior
 
-Shield launches Blitz with a **localhost Chromium remote-debugging port** and connects through Chrome DevTools Protocol. Other local programs may be able to access this debugging endpoint while Blitz remains running. Exiting Shield **does not** automatically close Blitz or that port. Fully quit Blitz after using Shield.
+By default, Shield launches Blitz with a **private pipe** (`--remote-debugging-pipe`) and connects through Chrome DevTools Protocol. No network port is opened, and only Shield holds the other end. Exiting Shield makes Blitz close its window to the tray and leaves it unfiltered.
+
+If the pipe cannot be started, or `"connectionMode": "port"` is set in `%LOCALAPPDATA%\BlitzAdShield\settings.json`, Shield uses the legacy **localhost remote-debugging port**. Other local programs may be able to access that endpoint while Blitz remains running, and exiting Shield does not close it. Fully quit Blitz after using Shield in that mode.
 
 The package consists of readable PowerShell/VBScript/CMD source files and one local icon. No administrator privilege, service installation, persistent system-level policy change, or developer-operated server is required.
 

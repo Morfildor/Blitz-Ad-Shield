@@ -8,7 +8,7 @@
 
 A free, open-source ad blocker for the **Blitz.gg desktop app on Windows**. It blocks known ad requests, cleans up empty ad spaces, and runs quietly in your system tray.
 
-[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.6.0.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
+[**⬇️ Download for Windows**](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.7.0.zip) · [Installation](#installation) · [Report an issue](https://github.com/Morfildor/Blitz-Ad-Shield/issues)
 
 <sub>Windows 10/11 · No subscription · No installer · MIT License</sub>
 
@@ -32,7 +32,7 @@ Blitz Ad Shield is a small tool I made to deal with that. Launch Blitz through i
 
 ## Installation
 
-1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.6.0.zip)** and extract the ZIP.
+1. **[Download Blitz Ad Shield](https://github.com/Morfildor/Blitz-Ad-Shield/raw/refs/heads/main/dist/Blitz-Ad-Shield-Tray-v0.7.0.zip)** and extract the ZIP.
 2. **Quit Blitz completely.** Make sure it's also closed in the Windows system tray.
 3. Open the extracted folder and double-click **`Launch-Blitz-Ad-Shield.vbs`**.
 4. Find the shield icon in your system tray. It might be tucked under the **^** hidden-icons menu.
@@ -71,7 +71,7 @@ Downloads come from this repository over HTTPS and are checked against a publish
 
 ## ⚙️ How it works
 
-Blitz Ad Shield connects to Blitz through the **Chromium DevTools Protocol (CDP)**. It filters selected advertising requests and applies CSS rules to hide known ad placeholders.
+Blitz Ad Shield launches Blitz and connects to it through the **Chromium DevTools Protocol (CDP)** over a **private pipe**, so no network port is opened. It filters selected advertising requests and applies CSS rules to hide known ad placeholders.
 
 The [PowerShell blocker](Blitz-Ad-Shield.ps1) does the filtering, and the [tray controller](Blitz-Ad-Shield-Tray.ps1) manages it. Logs are saved to `%LOCALAPPDATA%\BlitzAdShield\Logs`.
 
@@ -87,9 +87,11 @@ For other problems, open **Tray icon > Open logs folder** and check the latest `
 
 ## A note about security
 
-Shield opens a **local Chromium debugging port** while Blitz is running. Other programs on your computer may be able to access that session, so use it on a trusted PC.
+Shield talks to Blitz over a **private pipe** shared only between Shield and Blitz. It does **not** open a network debugging port, so other programs can't connect to Blitz through Shield.
 
-**Fully quit Blitz when you're done.** Closing the Shield tray app stops filtering, but it doesn't close Blitz's debugging port. Future Blitz updates may also change how ad filtering behaves.
+**If Shield stops, Blitz isn't filtered anymore.** Closing the Shield tray app makes Blitz close its window to the system tray and keep running with ads back, so Shield asks before stopping while Blitz is open. Restart Blitz through Shield to block ads again. Future Blitz updates may also change how ad filtering behaves.
+
+If the private pipe can't start on your PC, Shield falls back to the older localhost debugging port and says so in the log. You can also force that mode by adding `"connectionMode": "port"` to `%LOCALAPPDATA%\BlitzAdShield\settings.json`. While that port is open, other programs on your computer may be able to connect to it, so use it on a trusted PC and fully quit Blitz when you're done.
 
 ## Contributing
 

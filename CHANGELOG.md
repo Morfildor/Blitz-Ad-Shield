@@ -2,6 +2,21 @@
 
 All notable changes to Blitz Ad Shield are documented here.
 
+## [0.7.0] - 2026-11-09
+
+### Security
+- Shield now connects to Blitz over a private pipe (`--remote-debugging-pipe`) by default. No localhost debugging port is opened, so other programs can no longer reach Blitz through Shield.
+- If the pipe cannot start, the worker falls back to the localhost port and says so in the log. `"connectionMode": "port"` in `settings.json` (or the worker's `-UsePort` switch) forces the old behavior.
+
+### Changed
+- Stopping or exiting Shield while Blitz is open now asks first: Blitz closes its window to the tray and runs unfiltered until restarted through Shield.
+- A message that fails to process can no longer end the worker.
+- Saving the restart preference now keeps the connection mode setting.
+- Fixed the tray reporting a clean disconnect as 'The blocker stopped': Windows PowerShell returned a blank exit code unless the worker's process handle was cached.
+
+### Added
+- `tests/Test-Pipe.ps1`: handle inheritance, message framing and pipe closing, run in CI.
+
 ## [0.6.0] - 2026-11-09
 
 ### Changed

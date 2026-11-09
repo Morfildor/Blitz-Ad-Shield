@@ -59,6 +59,11 @@ jobs:
         run: |
           & powershell -NoProfile -ExecutionPolicy Bypass -File tests\Test-Worker.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Worker tests failed.' }
+      - name: Run pipe transport tests
+        shell: powershell
+        run: |
+          & powershell -NoProfile -ExecutionPolicy Bypass -File tests\Test-Pipe.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Pipe tests failed.' }
 
   package:
     needs: validate

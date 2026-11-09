@@ -34,12 +34,18 @@ $script:automaticInstallScheduled = $false
 $script:autoInstallStamp = Join-Path $script:updateStateDir 'last-auto-install.json'
 $script:settingsFile = Join-Path (Join-Path $env:LOCALAPPDATA 'BlitzAdShield') 'settings.json'
 $script:restartBlitzAfterUpdates = $true
+# 'pipe' (default) keeps Blitz's debugging channel private; 'port' is the legacy localhost port.
+$script:usePort = $false
 if (Test-Path -LiteralPath $script:settingsFile -PathType Leaf) {
     try {
         $preferences = Get-Content -LiteralPath $script:settingsFile -Raw -ErrorAction Stop | ConvertFrom-Json
         if ($preferences.PSObject.Properties.Name -contains 'restartBlitzAfterUpdates' -and
             $preferences.restartBlitzAfterUpdates -is [bool]) {
             $script:restartBlitzAfterUpdates = [bool]$preferences.restartBlitzAfterUpdates
+        }
+        if ($preferences.PSObject.Properties.Name -contains 'connectionMode' -and
+            [string]$preferences.connectionMode -eq 'port') {
+            $script:usePort = $true
         }
     } catch {
         # Use the default if settings are unreadable.
@@ -178,8 +184,12 @@ function Start-Shield {
         $shell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
         # Powershell's Start-Process will redirect both streams into local log files.
         $args = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -BlitzPath "{1}"' -f $script:workerScript, $BlitzPath
+        if ($script:usePort) { $args += ' -UsePort' }
         $script:worker = Start-Process -FilePath $shell -ArgumentList $args -PassThru -WindowStyle Hidden `
             -RedirectStandardOutput $script:stdoutPath -RedirectStandardError $script:stderrPath
+        # Windows PowerShell returns a blank ExitCode unless the process handle is cached
+        # while the process runs, and a blank code looked like a crash on every clean exit.
+        $null = $script:worker.Handle
     }
     catch {
         Set-TrayStatus 'Could not start'
@@ -187,6 +197,19 @@ function Start-Shield {
         $script:stopItem.Enabled = $false
         Show-ShieldNotice "Could not launch the blocker: $($_.Exception.Message)" $true
     }
+}
+
+# With the private connection, ending the worker makes Blitz close its window to the
+# tray and leaves it unfiltered. Make sure that is what the user wants.
+function Confirm-StopShield {
+    if ($script:usePort -or -not (Worker-IsRunning)) { return $true }
+    if (-not (Get-Process -Name Blitz -ErrorAction SilentlyContinue)) { return $true }
+    $answer = [System.Windows.Forms.MessageBox]::Show(
+        "Stopping Shield makes Blitz close its window to the system tray, and ads return until you restart Blitz through Shield.`n`nStop Shield anyway?",
+        'Blitz Ad Shield',
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Warning)
+    return ($answer -eq [System.Windows.Forms.DialogResult]::Yes)
 }
 
 function Stop-Shield {
@@ -380,8 +403,13 @@ function Poll-Updates {
 
 $script:startItem.Add_Click({ Start-Shield })
 $script:stopItem.Add_Click({
+    if (-not (Confirm-StopShield)) { return }
     Stop-Shield
-    Show-ShieldNotice 'Blocking stopped. Fully quit Blitz to close its debugging port; restart Blitz through Shield to resume.'
+    if ($script:usePort) {
+        Show-ShieldNotice 'Blocking stopped. Fully quit Blitz to close its debugging port; restart Blitz through Shield to resume.'
+    } else {
+        Show-ShieldNotice 'Blocking stopped. Fully quit Blitz, then restart it through Shield to block ads again.'
+    }
 })
 $script:checkUpdatesItem.Add_Click({ Start-UpdateCheck })
 $script:restartBlitzItem.Add_Click({
@@ -391,7 +419,9 @@ $script:restartBlitzItem.Add_Click({
         [void][IO.Directory]::CreateDirectory($parent)
         $tmp = Join-Path $parent ("settings-" + [guid]::NewGuid().ToString('N') + ".tmp")
         try {
-            @{ restartBlitzAfterUpdates = $script:restartBlitzAfterUpdates } |
+            $mode = 'pipe'
+            if ($script:usePort) { $mode = 'port' }
+            @{ restartBlitzAfterUpdates = $script:restartBlitzAfterUpdates; connectionMode = $mode } |
                 ConvertTo-Json | Set-Content -LiteralPath $tmp -Encoding UTF8
             Move-Item -LiteralPath $tmp -Destination $script:settingsFile -Force
         }
@@ -407,6 +437,7 @@ $script:logsItem.Add_Click({
 })
 $script:tray.Add_DoubleClick({ Show-ShieldNotice "Current status: $script:statusMessage" })
 $script:exitItem.Add_Click({
+    if (-not (Confirm-StopShield)) { return }
     $script:shuttingDown = $true
     Stop-Shield
     $script:context.ExitThread()
