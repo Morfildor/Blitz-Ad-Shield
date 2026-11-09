@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/shield.svg" alt="Blitz Ad Shield" width="88">
+<img src="docs/assets/logo.png" alt="Blitz Ad Shield" width="120">
 
 # Blitz Ad Shield
 
