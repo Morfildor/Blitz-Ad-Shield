@@ -24,8 +24,10 @@ Blitz Ad Shield is a small tool I made to deal with that. Launch Blitz through i
 
 ## ✨ Features
 
-- **Blocks ad requests.** Filters known advertising networks used by the Blitz desktop app.
+- **Blocks ad requests.** Filters known advertising networks used by the Blitz desktop app, before each page and frame starts loading.
 - **Cleans up the layout.** Hides empty ad containers so they don't take up space.
+- **Private connection.** Shield controls Blitz over a private pipe, so no network debugging port is opened on your PC.
+- **Light on your PC.** Only the few messages that matter are processed, so it stays out of the way while you play.
 - **Stays in your system tray.** Start or stop protection, check its status, and open logs with a right-click.
 - **Leaves game files alone.** No changes to Blitz's installed files, League of Legends, or Riot Vanguard.
 - **Runs locally.** No account, subscription, administrator rights, or separate ad-blocking service needed.
@@ -39,7 +41,7 @@ Blitz Ad Shield is a small tool I made to deal with that. Launch Blitz through i
 
 That's it. Blitz launches with Ad Shield running in the background. You don't need to keep a command window open, just leave the shield running in your tray.
 
-**Tray controls:** Right-click the shield icon for **Start protection**, **Stop protection**, **Check for updates**, **Open logs folder**, and **Exit Shield**. You can also turn **Restart Blitz after updates** on or off. The menu shows your installed version, update status, and last check time.
+**Tray controls:** Right-click the shield icon for **Start protection**, **Stop protection**, **Check for updates**, **Open logs folder**, and **Exit Shield**. You can also turn **Restart Blitz after updates** on or off. The menu shows your installed version, update status, and last check time. If you stop or exit Shield while Blitz is open, Shield asks first, because Blitz then closes its window to the tray and ads come back until you restart it through Shield.
 
 **Requirements:** Windows 10 or 11, Windows PowerShell 5.1, and the Blitz.gg desktop app.
 
@@ -71,15 +73,19 @@ Downloads come from this repository over HTTPS and are checked against a publish
 
 ## ⚙️ How it works
 
-Blitz Ad Shield launches Blitz and connects to it through the **Chromium DevTools Protocol (CDP)** over a **private pipe**, so no network port is opened. It filters selected advertising requests and applies CSS rules to hide known ad placeholders.
+Blitz Ad Shield launches Blitz and connects to it through the **Chromium DevTools Protocol (CDP)** over a **private pipe**, so no network port is opened. Each page and frame is paused for a moment while the block list and CSS are applied, then released, so ad requests don't slip through before the rules are in place. Shield filters selected advertising requests and applies CSS rules to hide known ad placeholders.
 
 The [PowerShell blocker](Blitz-Ad-Shield.ps1) does the filtering, and the [tray controller](Blitz-Ad-Shield-Tray.ps1) manages it. Logs are saved to `%LOCALAPPDATA%\BlitzAdShield\Logs`.
 
 It doesn't modify game files, change your DNS settings, or install a system-wide proxy.
 
+**Advanced switches** for the blocker script (`Blitz-Ad-Shield.ps1`): `-UsePort` uses the older localhost debugging port instead of the pipe, `-LegacyAttach` turns off the brief page pause, `-NoCosmetic` skips hiding ad containers, and `-DebugLog` prints what Shield attaches to and blocks.
+
 ## Troubleshooting
 
-**Blitz updated and Shield no longer connects?** Use **Check for updates** in the tray and review the logs. If Shield itself can't start, get the latest ZIP using the download link above. Since v0.3, the worker can reconnect after transient WebSocket failures and report the connection phase in its logs.
+**Blitz updated and Shield no longer connects?** Use **Check for updates** in the tray and review the logs. If Shield itself can't start, get the latest ZIP using the download link above. Blitz may restart itself once on its first launch after one of its own updates. If that happens, fully quit Blitz (including its tray icon) and start it through Shield again.
+
+**Ads are back, or Blitz went to the tray on its own?** That means Shield stopped or lost its connection. Quit Blitz from its tray icon and start it through Shield. If Shield had to fall back to the localhost port, the log says so, and the port mode reconnects after short interruptions and reports the connection phase.
 
 If Blitz doesn't start, make sure it's completely closed before launching Shield again. If the tray icon isn't visible, check the hidden-icons menu. If your PC blocks the VBScript launcher, use the CMD alternative above.
 

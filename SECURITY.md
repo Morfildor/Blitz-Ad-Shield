@@ -20,5 +20,5 @@ Please **do not publish credentials, active tokens, or proof-of-concept attacks 
 
 | Version | Status |
 | --- | --- |
-| 0.2 | Current |
-| Earlier versions | Not supported |
+| 0.7.x | Current |
+| Earlier versions | Not supported. Shield updates itself, so install the latest release. |
